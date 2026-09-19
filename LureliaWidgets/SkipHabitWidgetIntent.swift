@@ -57,19 +57,20 @@ struct SkipHabitWidgetIntent: AppIntent {
         let skips = try context.fetch(FetchDescriptor<LureliaHabitSkip>())
 
         let hasLog = logs.contains { log in
-            log.habit?.id == habit.id
+            (UUID(uuidString: log.habitIDString) ?? log.habit?.id) == habit.id
                 && calendar.isDate(log.dayStart, inSameDayAs: todayStart)
                 && max(log.count, log.completedFireTimes.count) > 0
         }
         guard !hasLog else { return }
 
         let hasSkip = skips.contains { skip in
-            skip.habit?.id == habit.id
+            (UUID(uuidString: skip.habitIDString) ?? skip.habit?.id) == habit.id
                 && calendar.isDate(skip.dayStart, inSameDayAs: todayStart)
         }
         guard !hasSkip else { return }
 
         let skip = LureliaHabitSkip(habit: habit, dayStart: todayStart)
+        skip.habitIDString = habit.id.uuidString
         context.insert(skip)
         habit.skips = (habit.skips ?? []) + [skip]
         habit.updatedAt = Date()
@@ -77,7 +78,5 @@ struct SkipHabitWidgetIntent: AppIntent {
 
     private func reloadHabitWidgets() {
         WidgetCenter.shared.reloadTimelines(ofKind: "LureliaHabitsWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "LureliaKanbanTimelineWidget")
-        WidgetCenter.shared.reloadAllTimelines()
     }
 }

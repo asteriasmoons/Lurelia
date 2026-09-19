@@ -330,120 +330,83 @@ enum LureliaNeutralGlassProminence {
     case active
 }
 
+// MARK: - Iridescent Liquid Glass
+//
+// Lurelia's permanent, non-user-colored surfaces render as dark smoked glass
+// lit from within by overlapping radial fields in the canonical Lurelia
+// palette (blue / violet / pink / gold). The colored light is *illumination
+// suspended inside* a near-black body -- never an opaque surface color, never
+// a flat rainbow gradient. The four light colors are configurable so the same
+// material can later receive harmonized colors derived from nearby user
+// content; the default is always the canonical palette. This is the ONLY place
+// the effect is defined -- every Lurelia-owned surface shares it.
+
+/// Shared renderer for Lurelia's neutral glass. The theme is JUST GLASS:
+/// dark smoked frosted glass with a faint hairline edge for definition and
+/// NOTHING else — no color, no white light pools, no iridescent rim. Users
+/// pick the colors for the real components, so Lurelia-owned surfaces stay
+/// colorless and sit calmly under any mix of user colors on screen.
+struct IridescentLiquidGlass<S: InsettableShape>: View {
+    let shape: S
+    var prominence: LureliaNeutralGlassProminence = .surface
+
+    var body: some View {
+        ZStack {
+            // The actual glass: real frosted translucency, tinted only with
+            // black so it reads as dark smoked glass. No hue, no white light.
+            if #available(iOS 26.0, *) {
+                Color.clear
+                    .glassEffect(.regular.tint(Color.black.opacity(smokeOpacity)), in: shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(Color.black.opacity(smokeOpacity))
+            }
+        }
+        // A hairline neutral edge so the glass shape reads. This is a glass
+        // rim for definition, not a light source — kept very faint.
+        .overlay {
+            shape.strokeBorder(Color.white.opacity(edgeOpacity), lineWidth: 1)
+        }
+    }
+
+    // Darker for large surfaces, slightly lighter/glassier for small controls.
+    private var smokeOpacity: Double {
+        switch prominence {
+        case .surface: return 0.42
+        case .lens:    return 0.36
+        case .active:  return 0.30
+        }
+    }
+
+    private var edgeOpacity: Double {
+        switch prominence {
+        case .surface: return 0.09
+        case .lens:    return 0.11
+        case .active:  return 0.13
+        }
+    }
+}
+
 struct LureliaNeutralGlassSurface: View {
     var cornerRadius: CGFloat = 24
     var prominence: LureliaNeutralGlassProminence = .surface
 
-    @ViewBuilder
     var body: some View {
-        if #available(iOS 26.0, *) {
-            nativeGlass
-        } else {
-            fallbackMaterial
-        }
-    }
-
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    private var nativeGlass: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(LColors.neutralGlassHighlight.opacity(nativeFrostOpacity))
-
-            Color.clear
-                .glassEffect(
-                    .regular.tint(LColors.neutralGlassHighlight.opacity(nativeTintOpacity)),
-                    in: .rect(cornerRadius: cornerRadius)
-                )
-        }
-    }
-
-    private var fallbackMaterial: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(LColors.neutralGlassBase.opacity(fallbackOpacity))
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-    }
-
-    private var fallbackOpacity: Double {
-        switch prominence {
-        case .surface: return 0.18
-        case .lens: return 0.16
-        case .active: return 0.20
-        }
-    }
-
-    private var nativeFrostOpacity: Double {
-        switch prominence {
-        case .surface: return 0.050
-        case .lens: return 0.055
-        case .active: return 0.065
-        }
-    }
-
-    private var nativeTintOpacity: Double {
-        switch prominence {
-        case .surface: return 0.040
-        case .lens: return 0.050
-        case .active: return 0.060
-        }
+        IridescentLiquidGlass(
+            shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous),
+            prominence: prominence
+        )
     }
 }
 
 struct LureliaNeutralGlassCircle: View {
     var prominence: LureliaNeutralGlassProminence = .surface
 
-    @ViewBuilder
     var body: some View {
-        if #available(iOS 26.0, *) {
-            nativeGlass
-        } else {
-            fallbackMaterial
-        }
-    }
-
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    private var nativeGlass: some View {
-        ZStack {
-            Circle()
-                .fill(LColors.neutralGlassHighlight.opacity(nativeFrostOpacity))
-
-            Color.clear
-                .glassEffect(
-                    .regular.tint(LColors.neutralGlassHighlight.opacity(nativeTintOpacity)),
-                    in: .circle
-                )
-        }
-    }
-
-    private var fallbackMaterial: some View {
-        Circle()
-            .fill(LColors.neutralGlassBase.opacity(fallbackOpacity))
-            .background(.ultraThinMaterial, in: Circle())
-    }
-
-    private var fallbackOpacity: Double {
-        switch prominence {
-        case .surface: return 0.18
-        case .lens: return 0.16
-        case .active: return 0.20
-        }
-    }
-
-    private var nativeFrostOpacity: Double {
-        switch prominence {
-        case .surface: return 0.050
-        case .lens: return 0.055
-        case .active: return 0.065
-        }
-    }
-
-    private var nativeTintOpacity: Double {
-        switch prominence {
-        case .surface: return 0.040
-        case .lens: return 0.050
-        case .active: return 0.060
-        }
+        IridescentLiquidGlass(
+            shape: Circle(),
+            prominence: prominence
+        )
     }
 }
 
@@ -453,7 +416,62 @@ extension View {
         prominence: LureliaNeutralGlassProminence = .surface
     ) -> some View {
         background {
-            LureliaNeutralGlassSurface(cornerRadius: cornerRadius, prominence: prominence)
+            LureliaNeutralGlassSurface(
+                cornerRadius: cornerRadius,
+                prominence: prominence
+            )
+        }
+    }
+}
+
+// MARK: - User Choice Color Surfaces
+
+enum LureliaUserChoiceSurfaceRole {
+    case hero
+    case supporting
+}
+
+struct LureliaUserChoiceSurface: View {
+    let tint: Color
+    var role: LureliaUserChoiceSurfaceRole = .supporting
+    var cornerRadius: CGFloat = 22
+
+    private var fillOpacity: Double {
+        role == .hero ? 0.30 : 0.22
+    }
+
+    private var borderOpacity: Double {
+        role == .hero ? 0.55 : 0.50
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(LColors.glassSurface)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(tint.opacity(fillOpacity))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(tint.opacity(borderOpacity), lineWidth: 1)
+            }
+            .shadow(
+                color: role == .hero ? tint.opacity(0.16) : .clear,
+                radius: role == .hero ? 18 : 0,
+                x: 0,
+                y: role == .hero ? 10 : 0
+            )
+    }
+}
+
+extension View {
+    func lureliaUserChoiceSurface(
+        tint: Color,
+        role: LureliaUserChoiceSurfaceRole = .supporting,
+        cornerRadius: CGFloat = 22
+    ) -> some View {
+        background {
+            LureliaUserChoiceSurface(tint: tint, role: role, cornerRadius: cornerRadius)
         }
     }
 }

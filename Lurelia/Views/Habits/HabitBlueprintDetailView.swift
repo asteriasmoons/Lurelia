@@ -60,7 +60,7 @@ struct HabitBlueprintDetailView: View {
 
                     // MARK: - Icon + Title + Description
 
-                    GlassCard(tint: accent) {
+                    userChoiceCard(role: .hero) {
                         VStack(spacing: 10) {
                             BlueprintIconPreview(iconName: habit.iconName ?? "flame", tint: accent)
 
@@ -99,7 +99,7 @@ struct HabitBlueprintDetailView: View {
                                 .foregroundStyle(.white)
                         }
 
-                        GlassCard(tint: accent) {
+                        userChoiceCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 HStack(spacing: 8) {
                                     detailPill(scheduleSummary)
@@ -147,7 +147,7 @@ struct HabitBlueprintDetailView: View {
                                 .foregroundStyle(.white)
                         }
 
-                        GlassCard(tint: accent) {
+                        userChoiceCard {
                             VStack(alignment: .leading, spacing: 14) {
                                 HStack(spacing: 8) {
                                     ForEach(0..<habit.target, id: \.self) { i in
@@ -272,7 +272,7 @@ struct HabitBlueprintDetailView: View {
                                     .foregroundStyle(.white)
                             }
 
-                            GlassCard(tint: accent) {
+                            userChoiceCard {
                                 Text(intention)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
                                     .foregroundStyle(.white)
@@ -472,6 +472,23 @@ struct HabitBlueprintDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
     }
 
+    // MARK: - Reusable User-Choice Card
+
+    private func userChoiceCard<Content: View>(
+        role: LureliaUserChoiceSurfaceRole = .supporting,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(LSpacing.cardPadding)
+            .background {
+                LureliaUserChoiceSurface(
+                    tint: accent,
+                    role: role,
+                    cornerRadius: 24
+                )
+            }
+    }
+
     // MARK: - Reusable Section Card
 
     private var undoProgressButton: some View {
@@ -531,7 +548,7 @@ struct HabitBlueprintDetailView: View {
                     .foregroundStyle(.white)
             }
 
-            GlassCard(tint: accent) {
+            userChoiceCard {
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -542,7 +559,7 @@ struct HabitBlueprintDetailView: View {
     // MARK: - Streak Card
 
     private func streakCard(label: String, value: String, unit: String) -> some View {
-        GlassCard(tint: accent) {
+        userChoiceCard {
             VStack(alignment: .leading, spacing: 6) {
                 Text(label.uppercased())
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -585,7 +602,7 @@ struct HabitBlueprintDetailView: View {
                         .foregroundStyle(.white)
                 }
 
-                GlassCard(tint: accent) {
+                userChoiceCard {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(cueCounts, id: \.type) { entry in
                             HStack(spacing: 12) {

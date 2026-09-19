@@ -96,7 +96,11 @@ struct ActiveRoutineBanner: View {
             .padding(.vertical, 12)
             .background {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(tint.opacity(0.26))
+                    .fill(LColors.bg)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(tint.opacity(0.28))
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 22, style: .continuous)
                             .strokeBorder(tint.opacity(0.55), lineWidth: 1)

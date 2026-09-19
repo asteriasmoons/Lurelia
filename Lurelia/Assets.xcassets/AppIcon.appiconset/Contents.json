@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "lurelia.png.png",
+      "filename" : "lureliadark.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "lurelia.png 1.png",
+      "filename" : "lureliadark 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "lurelia.png 2.png",
+      "filename" : "lureliadark 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"

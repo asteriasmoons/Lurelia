@@ -129,6 +129,14 @@ enum LureliaIconLibrary {
         .init(name: "pillows", source: .asset, category: "Bedroom"),
         .init(name: "starrypillow", source: .asset, category: "Bedroom"),
 
+        // Bulbs
+        .init(name: "brightbulb", source: .asset, category: "Bulbs"),
+        .init(name: "bulbxoxo", source: .asset, category: "Bulbs"),
+        .init(name: "devbulb", source: .asset, category: "Bulbs"),
+        .init(name: "handbulb", source: .asset, category: "Bulbs"),
+        .init(name: "starbulb", source: .asset, category: "Bulbs"),
+        .init(name: "xoxobulb", source: .asset, category: "Bulbs"),
+
         // Care
         .init(name: "fingersheart", source: .asset, category: "Care"),
         .init(name: "halfheart", source: .asset, category: "Care"),

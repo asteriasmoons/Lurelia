@@ -128,8 +128,19 @@ struct LureliaDueRoutinesProvider: AppIntentTimelineProvider {
             // Direct queries always read live state from disk.
             let allTasks = try context.fetch(FetchDescriptor<LureliaRoutineTask>())
             let allHistory = try context.fetch(FetchDescriptor<LureliaRoutineTaskHistoryEntry>())
+            var didBackfillWidgetIDs = false
             let tasksByRoutineID = Dictionary(grouping: allTasks) { task in
-                task.routine?.persistentID ?? ""
+                if !task.routinePersistentIDString.isEmpty {
+                    return task.routinePersistentIDString
+                }
+
+                if let routineID = task.routine?.persistentID {
+                    task.routinePersistentIDString = routineID
+                    didBackfillWidgetIDs = true
+                    return routineID
+                }
+
+                return ""
             }
 
             let now = Date()
@@ -138,7 +149,8 @@ struct LureliaDueRoutinesProvider: AppIntentTimelineProvider {
             let completedOrSkippedTaskIDsToday = todayHistoryTaskIDs(
                 from: allHistory,
                 now: now,
-                calendar: calendar
+                calendar: calendar,
+                didBackfillWidgetIDs: &didBackfillWidgetIDs
             )
 
             var items: [LureliaWidgetRoutineTaskItem] = []
@@ -153,7 +165,7 @@ struct LureliaDueRoutinesProvider: AppIntentTimelineProvider {
                 let routineTasks = tasksByRoutineID[routine.persistentID] ?? []
 
                 for task in routineTasks {
-                    let actionID = task.kanbanItemID
+                    let actionID = task.routineScopedTaskID
 
                     if completedOrSkippedTaskIDsToday.contains(actionID)
                         || taskHasTodayResolvedState(task, now: now, calendar: calendar)
@@ -197,7 +209,7 @@ struct LureliaDueRoutinesProvider: AppIntentTimelineProvider {
                 }
             }
 
-            if didResetStaleTasks {
+            if didResetStaleTasks || didBackfillWidgetIDs {
                 try context.save()
             }
 
@@ -334,14 +346,22 @@ struct LureliaDueRoutinesProvider: AppIntentTimelineProvider {
     private func todayHistoryTaskIDs(
         from history: [LureliaRoutineTaskHistoryEntry],
         now: Date,
-        calendar: Calendar
+        calendar: Calendar,
+        didBackfillWidgetIDs: inout Bool
     ) -> Set<String> {
         Set(
             history.compactMap { entry in
-                guard calendar.isDate(entry.date, inSameDayAs: now),
-                      let task = entry.task
-                else { return nil }
-                return task.kanbanItemID
+                guard calendar.isDate(entry.date, inSameDayAs: now) else { return nil }
+
+                if !entry.routineTaskIDString.isEmpty {
+                    return entry.routineTaskIDString
+                }
+
+                guard let task = entry.task else { return nil }
+                let taskID = task.routineScopedTaskID
+                entry.routineTaskIDString = taskID
+                didBackfillWidgetIDs = true
+                return taskID
             }
         )
     }

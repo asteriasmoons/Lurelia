@@ -20,7 +20,7 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
     )
 
     /// The task's routine-scoped widget action ID. Bare `stableTaskID` is not
-    /// unique across routines, so new widget rows pass `task.kanbanItemID`.
+    /// unique across routines, so new widget rows pass `task.routineScopedTaskID`.
     /// The resolver still accepts bare IDs for already-rendered old timelines.
     @Parameter(title: "Task ID")
     var taskID: String
@@ -89,11 +89,11 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
     private func routineTask(matching itemID: String, in context: ModelContext) throws -> LureliaRoutineTask? {
         let tasks = try context.fetch(FetchDescriptor<LureliaRoutineTask>())
 
-        if let exact = tasks.first(where: { $0.kanbanItemID == itemID }) {
+        if let exact = tasks.first(where: { $0.routineScopedTaskID == itemID }) {
             return exact
         }
 
-        let legacyMatches = tasks.filter { $0.matchesKanbanItemID(itemID) }
+        let legacyMatches = tasks.filter { $0.matchesRoutineScopedTaskID(itemID) }
         return legacyMatches.count == 1 ? legacyMatches.first : nil
     }
 
@@ -108,7 +108,7 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
         let allHistory = try context.fetch(FetchDescriptor<LureliaRoutineTaskHistoryEntry>())
 
         if let existing = allHistory.first(where: { entry in
-            entry.task?.kanbanItemID == task.kanbanItemID
+            (entry.routineTaskIDString.isEmpty ? entry.task?.routineScopedTaskID : entry.routineTaskIDString) == task.routineScopedTaskID
                 && calendar.isDate(entry.date, inSameDayAs: occurredAt)
         }) {
             existing.date = occurredAt
@@ -116,6 +116,7 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
             existing.durationSeconds = 0
             existing.skipReason = ""
             existing.note = ""
+            existing.routineTaskIDString = task.routineScopedTaskID
         } else {
             let entry = LureliaRoutineTaskHistoryEntry(
                 date: occurredAt,
@@ -124,6 +125,7 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
                 skipReason: "",
                 note: ""
             )
+            entry.routineTaskIDString = task.routineScopedTaskID
             context.insert(entry)
             entry.task = task
             task.historyItems = existingHistory + [entry]
@@ -140,8 +142,5 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
 
     private func reloadRoutineTaskWidgets() {
         WidgetCenter.shared.reloadTimelines(ofKind: "LureliaDueRoutinesWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "LureliaHabitsWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "LureliaKanbanTimelineWidget")
-        WidgetCenter.shared.reloadAllTimelines()
     }
 }

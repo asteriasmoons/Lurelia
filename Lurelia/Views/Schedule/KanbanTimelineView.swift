@@ -168,7 +168,7 @@ struct KanbanTimelineView: View {
                     HStack {
                         Text("Kanban Timeline")
                             .font(.system(size: 30, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
+                          .foregroundStyle(.white)
 
                         Spacer()
 
@@ -181,7 +181,7 @@ struct KanbanTimelineView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 28, height: 28)
-                                    .foregroundStyle(LGradients.header)
+                                 .foregroundStyle(LGradients.header)
                             }
                             .buttonStyle(.plain)
                             .disabled(selectedBoard == nil)
@@ -248,7 +248,7 @@ struct KanbanTimelineView: View {
                                         } else if cachedTimelineOccurrences.isEmpty {
                                             Text("No cards left for this day.")
                                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                                .foregroundStyle(.white.opacity(0.45))
+                                             .foregroundStyle(.white.opacity(0.45))
                                                 .padding(.leading, 48)
                                                 .padding(.vertical, 20)
                                         } else {
@@ -313,11 +313,11 @@ struct KanbanTimelineView: View {
                                                     .resizable()
                                                     .scaledToFit()
                                                     .frame(width: 20, height: 20)
-                                                    .foregroundStyle(LGradients.header)
+                                                 .foregroundStyle(LGradients.header)
 
                                                 Text("Add Column")
                                                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                                                    .foregroundStyle(LColors.textSecondary)
+                                                 .foregroundStyle(LColors.textSecondary)
 
                                                 Spacer()
                                             }
@@ -464,26 +464,26 @@ struct KanbanTimelineView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 19, height: 19)
-                                .foregroundStyle(selectedBoardAccent)
+                              .foregroundStyle(selectedBoardAccent)
                         } else {
                             Image("starcal")
                                 .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 19, height: 19)
-                                .foregroundStyle(LGradients.header)
+                              .foregroundStyle(LGradients.header)
                         }
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("BOARD")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.35))
+                          .foregroundStyle(.white.opacity(0.35))
                             .tracking(0.6)
 
                         Text(selectedBoard?.name ?? "Choose a Board")
                             .font(.system(size: 16, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
+                          .foregroundStyle(.white)
                             .lineLimit(1)
                     }
 
@@ -494,7 +494,7 @@ struct KanbanTimelineView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 18, height: 18)
-                        .foregroundStyle(LGradients.header)
+                       .foregroundStyle(LGradients.header)
                 }
             }
         }
@@ -515,7 +515,7 @@ struct KanbanTimelineView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 24, height: 24)
-                            .foregroundStyle(LGradients.header)
+                          .foregroundStyle(LGradients.header)
                     }
                     .buttonStyle(.plain)
 
@@ -523,7 +523,7 @@ struct KanbanTimelineView: View {
 
                     Text(weekRangeText)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.82))
+                       .foregroundStyle(.white.opacity(0.82))
 
                     Spacer()
 
@@ -535,7 +535,7 @@ struct KanbanTimelineView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 24, height: 24)
-                            .foregroundStyle(LGradients.header)
+                          .foregroundStyle(LGradients.header)
                     }
                     .buttonStyle(.plain)
                 }
@@ -2006,7 +2006,7 @@ struct KanbanTimelineColumnView: View {
             HStack {
                 Text(column.name)
                     .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(.white)
 
                 Spacer()
 
@@ -2032,7 +2032,7 @@ struct KanbanTimelineColumnView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 18, height: 18)
-                        .foregroundStyle(LGradients.header)
+                       .foregroundStyle(LGradients.header)
                 }
             }
             .padding(.horizontal, 14)
@@ -2054,11 +2054,11 @@ struct KanbanTimelineColumnView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 20, height: 20)
-                            .foregroundStyle(LColors.textSecondary.opacity(0.4))
+                          .foregroundStyle(LColors.textSecondary.opacity(0.4))
 
                         Text("No cards for this day")
                             .font(.system(size: 12, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary.opacity(0.4))
+                          .foregroundStyle(LColors.textSecondary.opacity(0.4))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
@@ -2069,12 +2069,11 @@ struct KanbanTimelineColumnView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(accentColor.opacity(0.10))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(accentColor.opacity(0.35), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: accentColor,
+                role: .supporting,
+                cornerRadius: 22
+            )
         }
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .sheet(item: Binding(
@@ -2489,13 +2488,13 @@ struct KanbanTimelineHabitOccurrenceCard: View {
                         .frame(width: 36, height: 36)
 
                     LureliaIconView(iconId: habit.iconName ?? "flame", size: 19)
-                        .foregroundStyle(.white)
+                       .foregroundStyle(.white)
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(habit.title)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(isCompletedForOccurrence || isSkippedForDay ? LColors.textSecondary : LColors.textPrimary)
+                        .foregroundStyle(isCompletedForOccurrence || isSkippedForDay ? Color.white.opacity(0.55) : .white)
                         .lineLimit(2)
 
                     HStack(spacing: 6) {
@@ -2518,7 +2517,7 @@ struct KanbanTimelineHabitOccurrenceCard: View {
                    !details.isEmpty {
                     Text(details)
                         .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary.opacity(0.75))
+                        .foregroundStyle(.white.opacity(0.60))
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
@@ -2533,12 +2532,11 @@ struct KanbanTimelineHabitOccurrenceCard: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.22), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: accent,
+                role: .supporting,
+                cornerRadius: 16
+            )
         }
         .opacity(isCompletedForOccurrence || isSkippedForDay ? 0.72 : 1)
     }
@@ -2618,7 +2616,7 @@ struct KanbanTimelineHabitOccurrenceCard: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                        .foregroundStyle(accent)
+                       .foregroundStyle(accent)
                 }
             }
             .contentShape(Circle())
@@ -2784,13 +2782,13 @@ struct KanbanTimelineRoutineOccurrenceCard: View {
                                 .frame(width: 36, height: 36)
 
                             LureliaIconView(iconId: routine.icon, size: 19)
-                                .foregroundStyle(.white)
+                              .foregroundStyle(.white)
                         }
 
                         VStack(alignment: .leading, spacing: 7) {
                             Text(routine.name)
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundStyle(LColors.textPrimary)
+                               .foregroundStyle(.white)
                                 .lineLimit(2)
 
                             HStack(spacing: 6) {
@@ -2806,7 +2804,7 @@ struct KanbanTimelineRoutineOccurrenceCard: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 14, height: 14)
-                            .foregroundStyle(accent)
+                          .foregroundStyle(accent)
                             .padding(.top, 11)
                     }
                 }
@@ -2819,7 +2817,7 @@ struct KanbanTimelineRoutineOccurrenceCard: View {
                 if routine.sortedTasks.isEmpty {
                     Text("No tasks in this routine yet")
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary.opacity(0.7))
+                        .foregroundStyle(.white.opacity(0.55))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 6)
                 } else {
@@ -2840,12 +2838,11 @@ struct KanbanTimelineRoutineOccurrenceCard: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.22), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: accent,
+                role: .supporting,
+                cornerRadius: 16
+            )
         }
     }
 
@@ -2964,7 +2961,7 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(task.title)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(isPendingForOccurrence ? LColors.textPrimary : LColors.textSecondary)
+                        .foregroundStyle(isPendingForOccurrence ? .white : Color.white.opacity(0.55))
                         .lineLimit(2)
 
                     HStack(spacing: 6) {
@@ -2985,7 +2982,7 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
                 if !task.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(task.notes)
                         .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary.opacity(0.75))
+                        .foregroundStyle(.white.opacity(0.60))
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
@@ -3000,12 +2997,11 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.22), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: accent,
+                role: .supporting,
+                cornerRadius: 16
+            )
         }
         .opacity(isPendingForOccurrence ? 1 : 0.72)
     }
@@ -3100,7 +3096,7 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                        .foregroundStyle(accent)
+                       .foregroundStyle(accent)
                 }
             }
             .contentShape(Circle())
@@ -3250,7 +3246,7 @@ struct KanbanTimelineRoutineDetailTaskCard: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(task.title)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(isPendingForOccurrence ? LColors.textPrimary : LColors.textSecondary)
+                    .foregroundStyle(isPendingForOccurrence ? .white : Color.white.opacity(0.55))
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
@@ -3272,10 +3268,12 @@ struct KanbanTimelineRoutineDetailTaskCard: View {
             Spacer(minLength: 0)
         }
         .padding(10)
-        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(accent.opacity(0.18), lineWidth: 1)
+        .background {
+            LureliaUserChoiceSurface(
+                tint: accent,
+                role: .supporting,
+                cornerRadius: 14
+            )
         }
     }
 
@@ -3309,11 +3307,11 @@ struct KanbanTimelineInboxColumnView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 16, height: 16)
-                        .foregroundStyle(boardAccent)
+                       .foregroundStyle(boardAccent)
 
                     Text("Inbox")
                         .font(.system(size: 14, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
+                        .foregroundStyle(.white)
                 }
 
                 Spacer()
@@ -3369,12 +3367,11 @@ struct KanbanTimelineInboxColumnView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(boardAccent.opacity(0.08))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(boardAccent.opacity(0.28), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: boardAccent,
+                role: .supporting,
+                cornerRadius: 22
+            )
         }
     }
 }
@@ -3517,13 +3514,13 @@ struct KanbanTimelineReminderCard: View {
                         .frame(width: 36, height: 36)
 
                     LureliaIconView(iconId: reminderIcon, size: 19)
-                        .foregroundStyle(.white)
+                       .foregroundStyle(.white)
                 }
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(reminder.title)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(reminder.isEnabled ? LColors.textPrimary : LColors.textSecondary)
+                        .foregroundStyle(reminder.isEnabled ? .white : Color.white.opacity(0.55))
                         .lineLimit(2)
 
                     badgeRow(overdue: overdue, dueNow: dueNow, upcoming: upcoming)
@@ -3542,7 +3539,7 @@ struct KanbanTimelineReminderCard: View {
                    !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(notes)
                         .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary.opacity(0.75))
+                        .foregroundStyle(.white.opacity(0.60))
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
@@ -3557,12 +3554,11 @@ struct KanbanTimelineReminderCard: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.22), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: accent,
+                role: .supporting,
+                cornerRadius: 16
+            )
         }
         .opacity(reminder.isEnabled ? 1 : 0.65)
     }
@@ -3586,7 +3582,7 @@ struct KanbanTimelineReminderCard: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                        .foregroundStyle(accent)
+                       .foregroundStyle(accent)
                 }
             }
             .contentShape(Circle())
@@ -3802,14 +3798,14 @@ struct KanbanTimelineInboxReminderCard: View {
             VStack(alignment: .leading, spacing: 7) {
                 Text(reminder.title)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(reminder.isEnabled ? LColors.textPrimary : LColors.textSecondary)
+                    .foregroundStyle(reminder.isEnabled ? .white : Color.white.opacity(0.55))
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
                     ForEach(Array(fireDates.prefix(2).enumerated()), id: \.offset) { _, date in
                         Text(date.formatted(date: .omitted, time: .shortened))
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(accent)
+                          .foregroundStyle(accent)
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                             .padding(.horizontal, 6)
@@ -3821,7 +3817,7 @@ struct KanbanTimelineInboxReminderCard: View {
                     if fireDates.count > 2 {
                         Text("+\(fireDates.count - 2)")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(accent)
+                          .foregroundStyle(accent)
                             .lineLimit(1)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -3835,12 +3831,11 @@ struct KanbanTimelineInboxReminderCard: View {
         }
         .padding(12)
         .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.22), lineWidth: 1)
-                }
+            LureliaUserChoiceSurface(
+                tint: accent,
+                role: .supporting,
+                cornerRadius: 16
+            )
         }
         .opacity(reminder.isEnabled ? 1 : 0.65)
     }
@@ -3906,11 +3901,11 @@ struct KanbanTimelineColumnSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(isEditing ? "Edit Column" : "New Column")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                          .foregroundStyle(.white)
 
                         Text(isEditing ? "Update this column." : "Add a column to \(board.name).")
                             .font(.system(size: 13, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.45))
+                          .foregroundStyle(.white.opacity(0.45))
                     }
 
                     Spacer()
@@ -3921,7 +3916,7 @@ struct KanbanTimelineColumnSheet: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 28, height: 28)
-                            .foregroundStyle(LGradients.header)
+                          .foregroundStyle(LGradients.header)
                     }
                     .buttonStyle(.plain)
                 }
@@ -3930,7 +3925,7 @@ struct KanbanTimelineColumnSheet: View {
                 LureliaFormSection(title: "Column Name") {
                     TextField("e.g. Morning, Afternoon, Evening", text: $name)
                         .font(.system(size: 15, design: .rounded))
-                        .foregroundStyle(.white)
+                       .foregroundStyle(.white)
                         .padding(14)
                         .background(.white.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -3940,7 +3935,7 @@ struct KanbanTimelineColumnSheet: View {
                     ColorPicker(selection: $selectedColor, supportsOpacity: false) {
                         Text("Column Color")
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
+                           .foregroundStyle(.white)
                     }
                     .padding(14)
                     .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -3949,7 +3944,7 @@ struct KanbanTimelineColumnSheet: View {
                 Button { save() } label: {
                     Text(isEditing ? "Save Changes" : "Add Column")
                         .font(.system(size: 16, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
+                        .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 60)
                         .background { LureliaNeutralGlassSurface(cornerRadius: 22) }
@@ -4027,11 +4022,11 @@ struct KanbanTimelineCreateBoardSheet: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("New Board")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                          .foregroundStyle(.white)
 
                         Text("Create a board for your timeline.")
                             .font(.system(size: 13, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.45))
+                          .foregroundStyle(.white.opacity(0.45))
                     }
 
                     Spacer()
@@ -4044,7 +4039,7 @@ struct KanbanTimelineCreateBoardSheet: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 28, height: 28)
-                            .foregroundStyle(LGradients.header)
+                          .foregroundStyle(LGradients.header)
                     }
                     .buttonStyle(.plain)
                 }
@@ -4053,7 +4048,7 @@ struct KanbanTimelineCreateBoardSheet: View {
                 LureliaFormSection(title: "Board Name") {
                     TextField("e.g. Weekly Flow", text: $name)
                         .font(.system(size: 15, design: .rounded))
-                        .foregroundStyle(.white)
+                       .foregroundStyle(.white)
                         .padding(14)
                         .background(.white.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -4079,7 +4074,7 @@ struct KanbanTimelineCreateBoardSheet: View {
                     ColorPicker(selection: $selectedColor, supportsOpacity: false) {
                         Text("Board Color")
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
+                           .foregroundStyle(.white)
                     }
                     .padding(14)
                     .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -4109,12 +4104,12 @@ struct KanbanTimelineCreateBoardSheet: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 14, height: 14)
-                            .foregroundStyle(.white)
+                          .foregroundStyle(.white)
 
                         Text("Create Board")
                             .font(.system(size: 16, weight: .black, design: .rounded))
                     }
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 60)
                     .background { LureliaNeutralGlassSurface(cornerRadius: 22) }

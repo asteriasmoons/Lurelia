@@ -44,6 +44,14 @@ enum LColors {
     static let neutralGlassBase = Color(lureliaHex: "#171A21")
     static let neutralGlassHighlight = Color(lureliaHex: "#E6E6EA")
 
+    // MARK: - Iridescent Liquid Glass (canonical Lurelia identity)
+    // Permanent Lurelia-owned surfaces are dark smoked glass lit from within
+    // by these four lights. Exact hexes from the Lurelia identity palette.
+    static let foundation = Color(lureliaHex: "#04040C")
+    static let darkGlass = Color(lureliaHex: "#171925")
+    static let raisedGlass = Color(lureliaHex: "#202231")
+    static let glassHighlight = Color(lureliaHex: "#D9E4F2")
+
     static let glassSurface = Color.white.opacity(0.06)
     static let glassSurface2 = Color.white.opacity(0.09)
     static let glassBorder = neutralSilver.opacity(0.14)

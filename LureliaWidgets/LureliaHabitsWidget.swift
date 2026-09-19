@@ -178,11 +178,13 @@ struct LureliaHabitsProvider: AppIntentTimelineProvider {
             let todayStart = calendar.startOfDay(for: now)
             let todayLogsByHabitID = logsByHabitID(
                 from: allLogs,
+                habits: allHabits,
                 todayStart: todayStart,
                 calendar: calendar
             )
             let skippedHabitIDs = skippedHabitIDs(
                 from: allSkips,
+                habits: allHabits,
                 todayStart: todayStart,
                 calendar: calendar
             )
@@ -245,14 +247,26 @@ struct LureliaHabitsProvider: AppIntentTimelineProvider {
 
     private func logsByHabitID(
         from logs: [LureliaHabitLog],
+        habits: [LureliaHabit],
         todayStart: Date,
         calendar: Calendar
     ) -> [UUID: [LureliaHabitLog]] {
         var result: [UUID: [LureliaHabitLog]] = [:]
+        var seenLogIDs = Set<UUID>()
 
         for log in logs where calendar.isDate(log.dayStart, inSameDayAs: todayStart) {
-            guard let habitID = log.habit?.id else { continue }
+            let storedID = UUID(uuidString: log.habitIDString)
+            guard let habitID = storedID ?? log.habit?.id else { continue }
             result[habitID, default: []].append(log)
+            seenLogIDs.insert(log.id)
+        }
+
+        for habit in habits {
+            for log in habit.logs ?? [] where calendar.isDate(log.dayStart, inSameDayAs: todayStart) {
+                guard !seenLogIDs.contains(log.id) else { continue }
+                result[habit.id, default: []].append(log)
+                seenLogIDs.insert(log.id)
+            }
         }
 
         return result
@@ -260,15 +274,26 @@ struct LureliaHabitsProvider: AppIntentTimelineProvider {
 
     private func skippedHabitIDs(
         from skips: [LureliaHabitSkip],
+        habits: [LureliaHabit],
         todayStart: Date,
         calendar: Calendar
     ) -> Set<UUID> {
-        Set(
-            skips.compactMap { skip in
-                guard calendar.isDate(skip.dayStart, inSameDayAs: todayStart) else { return nil }
-                return skip.habit?.id
+        var result = Set<UUID>()
+
+        for skip in skips where calendar.isDate(skip.dayStart, inSameDayAs: todayStart) {
+            let storedID = UUID(uuidString: skip.habitIDString)
+            if let habitID = storedID ?? skip.habit?.id {
+                result.insert(habitID)
             }
-        )
+        }
+
+        for habit in habits {
+            if (habit.skips ?? []).contains(where: { calendar.isDate($0.dayStart, inSameDayAs: todayStart) }) {
+                result.insert(habit.id)
+            }
+        }
+
+        return result
     }
 
     private func effectiveCompletionCount(for logs: [LureliaHabitLog], target: Int) -> Int {

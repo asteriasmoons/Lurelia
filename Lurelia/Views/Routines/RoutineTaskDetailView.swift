@@ -270,7 +270,7 @@ struct RoutineTaskDetailView: View {
     // MARK: - Identity
 
     private var identityCard: some View {
-        tintedCard {
+        tintedCard(role: .hero) {
             VStack(spacing: 10) {
                 ZStack {
                     Circle()
@@ -1106,21 +1106,17 @@ struct RoutineTaskDetailView: View {
     /// Routine-tinted card container (no brand gradient), matching the
     /// per-routine color language used across RoutineDetailView.
     private func tintedCard<Content: View>(
+        role: LureliaUserChoiceSurfaceRole = .supporting,
         @ViewBuilder content: () -> Content
     ) -> some View {
         content()
             .padding(18)
             .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(routineTint.opacity(0.14))
-                    }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(routineTint.opacity(0.45), lineWidth: 1)
+                LureliaUserChoiceSurface(
+                    tint: routineTint,
+                    role: role,
+                    cornerRadius: 22
+                )
             }
     }
 

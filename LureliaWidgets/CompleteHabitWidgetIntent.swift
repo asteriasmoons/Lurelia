@@ -56,7 +56,7 @@ struct CompleteHabitWidgetIntent: AppIntent {
 
         let todaysLogs = try context.fetch(FetchDescriptor<LureliaHabitLog>())
             .filter { log in
-                log.habit?.id == habit.id
+                (UUID(uuidString: log.habitIDString) ?? log.habit?.id) == habit.id
                     && calendar.isDate(log.dayStart, inSameDayAs: todayStart)
             }
 
@@ -65,6 +65,7 @@ struct CompleteHabitWidgetIntent: AppIntent {
         if let existingLog = todaysLogs.max(by: { effectiveCount($0) < effectiveCount($1) }) {
             log = existingLog
             isNewLog = false
+            log.habitIDString = habit.id.uuidString
         } else {
             let newLog = LureliaHabitLog(habit: habit, dayStart: todayStart, count: 1)
             log = newLog
@@ -117,7 +118,7 @@ struct CompleteHabitWidgetIntent: AppIntent {
     ) throws {
         let todaysSkips = try context.fetch(FetchDescriptor<LureliaHabitSkip>())
             .filter { skip in
-                skip.habit?.id == habit.id
+                (UUID(uuidString: skip.habitIDString) ?? skip.habit?.id) == habit.id
                     && calendar.isDate(skip.dayStart, inSameDayAs: todayStart)
             }
 
@@ -135,7 +136,5 @@ struct CompleteHabitWidgetIntent: AppIntent {
 
     private func reloadHabitWidgets() {
         WidgetCenter.shared.reloadTimelines(ofKind: "LureliaHabitsWidget")
-        WidgetCenter.shared.reloadTimelines(ofKind: "LureliaKanbanTimelineWidget")
-        WidgetCenter.shared.reloadAllTimelines()
     }
 }
