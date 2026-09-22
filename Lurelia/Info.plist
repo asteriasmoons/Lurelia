@@ -2,16 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Lurelia uses alarms when you turn them on for reminders that need a stronger sound and system alert.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Lurelia uses calendar access to show Apple Calendar events beside your Lurelia events and sync events when you turn syncing on.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>Lurelia uses calendar access to show Apple Calendar events beside your Lurelia events.</string>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

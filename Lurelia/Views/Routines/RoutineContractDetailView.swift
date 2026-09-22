@@ -14,13 +14,23 @@ struct RoutineContractDetailView: View {
     let routine: LureliaRoutine?
 
     @State private var showRenewContract = false
+    @State private var displayedContractID: String?
 
     private var displayRoutine: LureliaRoutine? {
         routine ?? contract.routine
     }
 
+    private var displayedContract: LureliaRoutineContract {
+        guard let displayedContractID,
+              let match = displayRoutine?.contracts?.first(where: { $0.persistentID == displayedContractID })
+        else {
+            return contract
+        }
+        return match
+    }
+
     private var routineTint: Color {
-        Color(lureliaHex: contract.routineDisplayColorHex)
+        Color(lureliaHex: displayedContract.routineDisplayColorHex)
     }
 
     private var solidTextColor: Color {
@@ -28,7 +38,7 @@ struct RoutineContractDetailView: View {
     }
 
     private var signedDateText: String {
-        contract.dateCommitted.formatted(date: .long, time: .omitted)
+        displayedContract.dateCommitted.formatted(date: .long, time: .omitted)
     }
 
     var body: some View {
@@ -56,11 +66,13 @@ struct RoutineContractDetailView: View {
             }
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showRenewContract) {
+            .sheet(isPresented: $showRenewContract, onDismiss: {
+                showNewestCurrentContract()
+            }) {
                 if let displayRoutine {
                     RoutineContractEditorView(
                         routine: displayRoutine,
-                        renewingFrom: contract
+                        renewingFrom: displayedContract
                     )
                 }
             }
@@ -74,7 +86,7 @@ struct RoutineContractDetailView: View {
                     .font(.system(size: 20, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text(contract.routineDisplayName)
+                Text(displayedContract.routineDisplayName)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.58))
                     .lineLimit(1)
@@ -112,7 +124,7 @@ struct RoutineContractDetailView: View {
                             .fill(routineTint.opacity(0.20))
                             .frame(width: 60, height: 60)
 
-                        LureliaIconView(iconId: contract.routineDisplayIcon, size: 31)
+                        LureliaIconView(iconId: displayedContract.routineDisplayIcon, size: 31)
                             .foregroundStyle(routineTint)
                     }
 
@@ -121,7 +133,7 @@ struct RoutineContractDetailView: View {
                             .font(.system(size: 10, weight: .black, design: .rounded))
                             .foregroundStyle(routineTint)
 
-                        Text(contract.routineDisplayName)
+                        Text(displayedContract.routineDisplayName)
                             .font(.system(size: 17, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
                             .lineLimit(2)
@@ -141,11 +153,11 @@ struct RoutineContractDetailView: View {
             ],
             spacing: 10
         ) {
-            contractMetaTile(title: "Status", value: contract.status.rawValue, icon: contract.status.icon)
-            contractMetaTile(title: "Committed", value: contract.committedDateText, icon: "starcal")
-            contractMetaTile(title: "Duration", value: contract.durationText, icon: "hourglassfill")
-            contractMetaTile(title: "Failed Days", value: contract.failedRoutineDayText, icon: "warnwavy")
-            if let brokenDateText = contract.brokenDateText {
+            contractMetaTile(title: "Status", value: displayedContract.status.rawValue, icon: displayedContract.status.icon)
+            contractMetaTile(title: "Committed", value: displayedContract.committedDateText, icon: "starcal")
+            contractMetaTile(title: "Duration", value: displayedContract.durationText, icon: "hourglassfill")
+            contractMetaTile(title: "Failed Days", value: displayedContract.failedRoutineDayText, icon: "warnwavy")
+            if let brokenDateText = displayedContract.brokenDateText {
                 contractMetaTile(title: "Broken", value: brokenDateText, icon: "xmarkwavy")
             }
         }
@@ -155,12 +167,12 @@ struct RoutineContractDetailView: View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 documentSmallField(title: "Date Committed", value: signedDateText)
-                documentSmallField(title: "Contractee", value: contract.contracteeName)
+                documentSmallField(title: "Contractee", value: displayedContract.contracteeName)
             }
 
-            contractDocumentSection("Meaning", text: contract.meaning)
-            contractDocumentSection("Decree Statement", text: contract.decreeStatement)
-            contractDocumentSection("Consequences", text: contract.consequences)
+            contractDocumentSection("Meaning", text: displayedContract.meaning)
+            contractDocumentSection("Decree Statement", text: displayedContract.decreeStatement)
+            contractDocumentSection("Consequences", text: displayedContract.consequences)
             signatureSection
         }
     }
@@ -179,7 +191,7 @@ struct RoutineContractDetailView: View {
                     Spacer()
                 }
 
-                if contract.status == .renewed {
+                if displayedContract.status == .renewed {
                     HStack(spacing: 10) {
                         LureliaIconView(iconId: "repeatfill", size: 14)
                             .foregroundStyle(routineTint)
@@ -241,7 +253,7 @@ struct RoutineContractDetailView: View {
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.62))
 
-            Text(contract.typedSignature)
+            Text(displayedContract.typedSignature)
                 .font(.system(size: 17, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .fixedSize(horizontal: false, vertical: true)
@@ -302,7 +314,7 @@ struct RoutineContractDetailView: View {
     }
 
     private func statusButton(_ status: LureliaRoutineContractStatus) -> some View {
-        let isSelected = contract.status == status
+        let isSelected = displayedContract.status == status
         return Button {
             setStatus(status)
         } label: {
@@ -330,12 +342,22 @@ struct RoutineContractDetailView: View {
         .buttonStyle(.plain)
     }
 
+    private func showNewestCurrentContract() {
+        guard let newest = displayRoutine?.contracts?
+            .filter({ $0.isCurrent })
+            .sorted(by: { $0.createdAt > $1.createdAt })
+            .first
+        else { return }
+
+        displayedContractID = newest.persistentID
+    }
+
     private func setStatus(_ status: LureliaRoutineContractStatus) {
-        contract.status = status
+        displayedContract.status = status
         if status == .broken {
-            contract.brokenAt = contract.brokenAt ?? Date()
+            displayedContract.brokenAt = displayedContract.brokenAt ?? Date()
         }
-        contract.updatedAt = Date()
+        displayedContract.updatedAt = Date()
         try? modelContext.save()
     }
 

@@ -16,6 +16,7 @@ struct RoutineDetailView: View {
     let routineID: PersistentIdentifier
 
     @Query private var routines: [LureliaRoutine]
+    @Query(sort: \LureliaRoutine.sortOrder) private var allRoutines: [LureliaRoutine]
 
     private var routine: LureliaRoutine {
         guard let routine = routines.first else {
@@ -50,6 +51,8 @@ struct RoutineDetailView: View {
     @State private var offDayPickerExpanded = false
     @State private var pendingOffDayDate = Date()
     @State private var offDayValidationMessage: String?
+    @State private var calendarExpanded = false
+    @State private var displayedCalendarMonth = Date()
     
     private var routineTint: Color {
         Color(lureliaHex: routine.colorHex)
@@ -290,6 +293,8 @@ struct RoutineDetailView: View {
                     if !routine.principles.isEmpty {
                         principlesCard
                     }
+
+                    routineCalendarCard
                     
                     historyCard
                     
@@ -747,7 +752,7 @@ extension RoutineDetailView {
     }
     
     private var scheduledDaysCard: some View {
-        detailSectionCard(title: "Scheduled Days", icon: "starcal") {
+        detailSectionCard(title: "Scheduled Days", icon: "writepen") {
             if routine.scheduledDays.isEmpty {
                 emptySectionText("No days selected for this routine yet.")
             } else {
@@ -1194,7 +1199,76 @@ extension RoutineDetailView {
             } label: {
                 Label { Text("Edit") } icon: { Image("settings").renderingMode(.template) }
             }
+
+            if !availableMoveDestinations.isEmpty {
+                Divider()
+
+                Section("Move to Routine") {
+                    ForEach(availableMoveDestinations) { destination in
+                        Button {
+                            moveTask(task, to: destination)
+                        } label: {
+                            Label {
+                                Text(destination.name)
+                            } icon: {
+                                Image(destination.icon)
+                                    .renderingMode(.template)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            Button {
+                deleteTask(task)
+            } label: {
+                Label {
+                    Text("Delete")
+                } icon: {
+                    Image("trash")
+                        .renderingMode(.template)
+                }
+            }
+            .tint(.white)
         }
+    }
+
+    private func deleteTask(_ task: LureliaRoutineTask) {
+        modelContext.delete(task)
+        routine.updatedAt = Date()
+        try? modelContext.save()
+        LureliaWidgetReloads.reloadAll()
+    }
+
+    private var availableMoveDestinations: [LureliaRoutine] {
+        allRoutines
+            .filter { $0.persistentID != routine.persistentID }
+            .sorted {
+                if $0.sortOrder == $1.sortOrder {
+                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                }
+                return $0.sortOrder < $1.sortOrder
+            }
+    }
+
+    private func moveTask(_ task: LureliaRoutineTask, to destination: LureliaRoutine) {
+        guard destination.persistentID != routine.persistentID else { return }
+
+        let destinationTasks = destination.sortedTasks
+        let nextSortOrder = (destinationTasks.map(\.sortOrder).max() ?? -1) + 1
+
+        task.attach(to: destination)
+        task.phaseID = nil
+        task.sortOrder = nextSortOrder
+        task.updatedAt = Date()
+
+        routine.updatedAt = Date()
+        destination.updatedAt = Date()
+
+        try? modelContext.save()
+        LureliaWidgetReloads.reloadAll()
     }
 
     // MARK: - Phases Flow Section
@@ -1336,6 +1410,235 @@ extension RoutineDetailView {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Calendar Card
+
+    private var routineCalendarCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                    calendarExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 9) {
+                    Image("ringstarcal")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(routineTint)
+                        .frame(width: 15, height: 15)
+
+                    Text("Calendar")
+                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .foregroundStyle(routineTint)
+
+                    Spacer()
+
+                    Image(calendarExpanded ? "chevup" : "chevdown")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(routineTint)
+                        .frame(width: 15, height: 15)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if calendarExpanded {
+                VStack(spacing: 14) {
+                    HStack {
+                        Button {
+                            changeCalendarMonth(by: -1)
+                        } label: {
+                            Image("chevleft")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 15, height: 15)
+                                .foregroundStyle(routineTint)
+                                .frame(width: 36, height: 36)
+                                .background(routineTint.opacity(0.14), in: Circle())
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(routineTint.opacity(0.38), lineWidth: 1)
+                                }
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        Text(displayedCalendarMonth.formatted(.dateTime.month(.wide).year()))
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundStyle(adaptiveRoutineTextColor)
+
+                        Spacer()
+
+                        Button {
+                            changeCalendarMonth(by: 1)
+                        } label: {
+                            Image("chevright")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 15, height: 15)
+                                .foregroundStyle(routineTint)
+                                .frame(width: 36, height: 36)
+                                .background(routineTint.opacity(0.14), in: Circle())
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(routineTint.opacity(0.38), lineWidth: 1)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
+                        spacing: 8
+                    ) {
+                        ForEach(Calendar.current.veryShortWeekdaySymbols, id: \.self) { symbol in
+                            Text(symbol)
+                                .font(.system(size: 10, weight: .black, design: .rounded))
+                                .foregroundStyle(routineTint)
+                                .frame(maxWidth: .infinity)
+                        }
+
+                        ForEach(Array(calendarDaysForDisplayedMonth.enumerated()), id: \.offset) { _, date in
+                            if let date {
+                                Text("\(Calendar.current.component(.day, from: date))")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(
+                                        Calendar.current.isDateInToday(date)
+                                        ? routineFillTextColor
+                                        : adaptiveRoutineTextColor
+                                    )
+                                    .frame(width: 32, height: 32)
+                                    .background {
+                                        Circle()
+                                            .fill(
+                                                Calendar.current.isDateInToday(date)
+                                                ? routineTint
+                                                : LColors.glassSurface2
+                                            )
+                                    }
+                                    .overlay {
+                                        Circle()
+                                            .strokeBorder(
+                                                Calendar.current.isDateInToday(date)
+                                                ? routineTint.opacity(0.85)
+                                                : routineTint.opacity(0.30),
+                                                lineWidth: 1
+                                            )
+                                    }
+                                    .frame(maxWidth: .infinity)
+                            } else {
+                                Color.clear
+                                    .frame(height: 32)
+                            }
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity)
+                .background {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(LColors.glassSurface)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(routineTint.opacity(0.22))
+                        }
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        calendarExpanded = true
+                    }
+                } label: {
+                    HStack(spacing: 9) {
+                        Image("ringstarcal")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 15, height: 15)
+
+                        Text("View Calendar")
+                            .font(.system(size: 14, weight: .black, design: .rounded))
+                    }
+                    .foregroundStyle(routineFillTextColor)
+                    .wcagContrastLift(on: routineTint)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(routineTint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(14)
+                .frame(maxWidth: .infinity)
+                .background {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(LColors.glassSurface)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(routineTint.opacity(0.22))
+                        }
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private var calendarDaysForDisplayedMonth: [Date?] {
+        let calendar = Calendar.current
+        guard
+            let monthInterval = calendar.dateInterval(of: .month, for: displayedCalendarMonth),
+            let dayRange = calendar.range(of: .day, in: .month, for: displayedCalendarMonth)
+        else {
+            return []
+        }
+
+        let firstDay = monthInterval.start
+        let firstWeekday = calendar.component(.weekday, from: firstDay)
+        var days = Array<Date?>(repeating: nil, count: max(0, firstWeekday - 1))
+
+        for day in dayRange {
+            if let date = calendar.date(byAdding: .day, value: day - 1, to: firstDay) {
+                days.append(date)
+            }
+        }
+
+        while days.count % 7 != 0 {
+            days.append(nil)
+        }
+
+        return days
+    }
+
+    private func changeCalendarMonth(by value: Int) {
+        guard let newMonth = Calendar.current.date(
+            byAdding: .month,
+            value: value,
+            to: displayedCalendarMonth
+        ) else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            displayedCalendarMonth = newMonth
         }
     }
 
