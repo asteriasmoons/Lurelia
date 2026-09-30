@@ -1,0 +1,48 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/LureliaHabitsWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Habits",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 370
+        }
+      },
+      {
+        "comment": "",
+        "key": "Today",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 376
+        }
+      },
+      {
+        "comment": "",
+        "key": "No habits for today",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 384
+        }
+      },
+      {
+        "comment": "",
+        "key": "Today's Habits",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 680
+        }
+      },
+      {
+        "comment": "",
+        "key": "Track and complete your daily habits.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 681
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,56 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/LureliaDueRoutinesWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Nothing due soon",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 458
+        }
+      },
+      {
+        "comment": "",
+        "key": "Routine Tasks",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 449
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip %@",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 552
+        }
+      },
+      {
+        "comment": "",
+        "key": "Complete %@",
+        "location": {
+          "startingColumn": 29,
+          "startingLine": 575
+        }
+      },
+      {
+        "comment": "",
+        "key": "Routine Tasks",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 647
+        }
+      },
+      {
+        "comment": "",
+        "key": "See the routine tasks that are soon or due right now, tinted by their routine.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 648
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -61,12 +61,24 @@ struct CompleteRoutineTaskWidgetIntent: AppIntent {
             return .result()
         }
 
+        let occurredAt = Date()
         print("🟣 [WidgetIntent] CompleteRoutineTask — recording completion history")
         try recordRoutineTaskHistory(
             task,
             wasCompleted: true,
-            occurredAt: Date(),
+            occurredAt: occurredAt,
             context: context
+        )
+
+        LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+            for: task,
+            on: occurredAt,
+            now: occurredAt
+        )
+        await LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrenceAndWait(
+            for: task,
+            on: occurredAt,
+            now: occurredAt
         )
 
         // If completing this task finished off the routine, mark the routine

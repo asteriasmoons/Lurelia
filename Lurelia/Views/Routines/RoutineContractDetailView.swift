@@ -84,7 +84,8 @@ struct RoutineContractDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Routine Contract")
                     .font(.system(size: 20, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: routineTint)
+                    .shadow(color: .black.opacity(0.68), radius: 3, x: 0, y: 2)
 
                 Text(displayedContract.routineDisplayName)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
@@ -102,13 +103,12 @@ struct RoutineContractDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 17, height: 17)
-                    .foregroundStyle(solidTextColor)
-                    .wcagContrastLift(on: routineTint)
+                    .bubblyIconMaterial(tint: solidTextColor)
+                    .shadow(color: .black.opacity(0.68), radius: 3, x: 0, y: 2)
                     .frame(width: 42, height: 42)
-                    .background(routineTint, in: Circle())
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                    .background {
+                        BubblyIconMaterial(tint: routineTint)
+                            .clipShape(Circle())
                     }
             }
             .buttonStyle(.plain)
@@ -121,17 +121,23 @@ struct RoutineContractDetailView: View {
                 HStack(spacing: 14) {
                     ZStack {
                         Circle()
-                            .fill(routineTint.opacity(0.20))
+                            .fill(Color.black.opacity(0.48))
                             .frame(width: 60, height: 60)
 
-                        LureliaIconView(iconId: displayedContract.routineDisplayIcon, size: 31)
-                            .foregroundStyle(routineTint)
+                        BubblyIconMaterial(tint: routineTint)
+                            .mask {
+                                Circle().strokeBorder(lineWidth: 1.5)
+                            }
+                            .frame(width: 60, height: 60)
+
+                        contractMaterialIcon(displayedContract.routineDisplayIcon, size: 31)
                     }
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text("ROUTINE CONTRACT")
                             .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundStyle(routineTint)
+                            .bubblyIconMaterial(tint: routineTint)
+                            .shadow(color: .black.opacity(0.68), radius: 2, x: 0, y: 1)
 
                         Text(displayedContract.routineDisplayName)
                             .font(.system(size: 17, weight: .black, design: .rounded))
@@ -181,8 +187,7 @@ struct RoutineContractDetailView: View {
         routineTintCard(cornerRadius: 24) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 9) {
-                    LureliaIconView(iconId: "settings", size: 16)
-                        .foregroundStyle(routineTint)
+                    contractMaterialIcon("settings", size: 16)
 
                     Text("Contract Status")
                         .font(.system(size: 14, weight: .black, design: .rounded))
@@ -193,18 +198,15 @@ struct RoutineContractDetailView: View {
 
                 if displayedContract.status == .renewed {
                     HStack(spacing: 10) {
-                        LureliaIconView(iconId: "repeatfill", size: 14)
-                            .foregroundStyle(routineTint)
+                        contractMaterialIcon("repeatfill", size: 14)
                         Text("This contract was renewed and preserved in history.")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.68))
                         Spacer()
                     }
                     .padding(12)
-                    .background(routineTint.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(routineTint.opacity(0.38), lineWidth: 1)
+                    .background {
+                        BubblyCardMaterial(tint: routineTint, cornerRadius: 14)
                     }
                 } else {
                     LazyVGrid(
@@ -230,6 +232,8 @@ struct RoutineContractDetailView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 16, height: 16)
+                                    .bubblyIconMaterial(tint: solidTextColor)
+                                    .shadow(color: .black.opacity(0.95), radius: 5, x: 0, y: 3)
 
                                 Text("Renew Contract")
                                     .font(.system(size: 14, weight: .black, design: .rounded))
@@ -238,7 +242,9 @@ struct RoutineContractDetailView: View {
                             .wcagContrastLift(on: routineTint)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(routineTint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .background {
+                                BubblyCardMaterial(tint: routineTint, cornerRadius: 16)
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -260,15 +266,14 @@ struct RoutineContractDetailView: View {
 
             Text(signedDateText)
                 .font(.system(size: 12, weight: .black, design: .rounded))
-                .foregroundStyle(routineTint)
+                .bubblyIconMaterial(tint: routineTint)
         }
         .routineContractCardSurface(routineTint, cornerRadius: 22, padding: 16)
     }
 
     private func contractMetaTile(title: String, value: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            LureliaIconView(iconId: icon, size: 17)
-                .foregroundStyle(routineTint)
+            contractMaterialIcon(icon, size: 17)
 
             Text(title.uppercased())
                 .font(.system(size: 10, weight: .black, design: .rounded))
@@ -319,9 +324,11 @@ struct RoutineContractDetailView: View {
             setStatus(status)
         } label: {
             VStack(spacing: 7) {
-                LureliaIconView(iconId: status.icon, size: 16)
-                    .foregroundStyle(isSelected ? solidTextColor : routineTint)
-                    .wcagContrastLift(on: isSelected ? routineTint : routineTint.opacity(0.14))
+                contractMaterialIcon(
+                    status.icon,
+                    size: 16,
+                    tint: isSelected ? solidTextColor : routineTint
+                )
 
                 Text(status.rawValue)
                     .font(.system(size: 12, weight: .black, design: .rounded))
@@ -330,10 +337,12 @@ struct RoutineContractDetailView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isSelected ? routineTint : routineTint.opacity(0.14))
-            )
+            .background {
+                BubblyIconMaterial(
+                    tint: isSelected ? routineTint : routineTint.opacity(0.32)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(isSelected ? Color.white.opacity(0.16) : routineTint.opacity(0.38), lineWidth: 1)
@@ -368,6 +377,16 @@ struct RoutineContractDetailView: View {
         content()
             .routineContractCardSurface(routineTint, cornerRadius: cornerRadius, padding: 18)
     }
+
+    private func contractMaterialIcon(
+        _ icon: String,
+        size: CGFloat,
+        tint: Color? = nil
+    ) -> some View {
+        LureliaIconView(iconId: icon, size: size)
+            .bubblyIconMaterial(tint: tint ?? routineTint)
+            .shadow(color: .black.opacity(0.95), radius: 5, x: 0, y: 3)
+    }
 }
 
 private extension View {
@@ -380,16 +399,7 @@ private extension View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(padding)
             .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(tint.opacity(0.24))
-                    }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(tint.opacity(0.62), lineWidth: 1.1)
+                BubblyCardMaterial(tint: tint, cornerRadius: cornerRadius)
             }
     }
 }

@@ -10,6 +10,8 @@
 import SwiftUI
 
 struct LureliaAgendaView: View {
+    @Environment(\.appTheme) private var theme
+
     @Binding var focusedDate: Date
 
     let interval: DateInterval
@@ -17,6 +19,7 @@ struct LureliaAgendaView: View {
     let externalOccurrences: [LureliaExternalCalendarOccurrence]
     let events: [LureliaEvent]
     let onSelect: (LureliaEventUnifiedOccurrence) -> Void
+    let onDelete: (LureliaEventUnifiedOccurrence) -> Void
 
     private let calendar = Calendar.current
 
@@ -52,19 +55,25 @@ struct LureliaAgendaView: View {
     }
 
     private var weekRow: some View {
-        GlassCard(cornerRadius: 24, padding: 12) {
+        agendaDatePickerSurface {
             VStack(spacing: 10) {
                 HStack {
                     Button { moveWeek(by: -1) } label: {
-                        Image("chevleft")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                            .foregroundStyle(LGradients.header)
-                        .frame(width: 32, height: 32)
+                        ZStack {
+                            Color.clear
+
+                            Image("chevleft")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                                .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                        }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Previous week")
 
                     Spacer()
 
@@ -75,15 +84,21 @@ struct LureliaAgendaView: View {
                     Spacer()
 
                     Button { moveWeek(by: 1) } label: {
-                        Image("chevright")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
-                            .foregroundStyle(LGradients.header)
-                        .frame(width: 32, height: 32)
+                        ZStack {
+                            Color.clear
+
+                            Image("chevright")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 24, height: 24)
+                                .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                        }
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Next week")
                 }
 
                 weekDayPicker
@@ -106,46 +121,69 @@ struct LureliaAgendaView: View {
     private func dayButton(_ day: Date) -> some View {
         let isSelected = calendar.isDate(day, inSameDayAs: focusedDate)
         let isToday = calendar.isDateInToday(day)
+        let accent = dayAccent(for: day)
 
         return Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                 focusedDate = day
             }
         } label: {
-            ZStack {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(LColors.neutralGlassHighlight.opacity(0.055))
+            VStack(spacing: 5) {
+                Text(day.formatted(.dateTime.weekday(.narrow)))
+                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .foregroundStyle(isSelected ? Color.white : theme.palette.textSecondary)
 
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(LGradients.header.opacity(0.52), lineWidth: 1)
-                } else {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(LColors.neutralGlassHighlight.opacity(0.035))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(LColors.neutralGlassHighlight.opacity(0.14), lineWidth: 1)
-                        }
-                }
+                Text(day.formatted(.dateTime.day()))
+                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .foregroundStyle(isSelected ? Color.white : theme.palette.textPrimary)
 
-                VStack(spacing: 5) {
-                    Text(day.formatted(.dateTime.weekday(.narrow)))
-                        .font(.system(size: 11, weight: .black, design: .rounded))
-                        .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.56))
-
-                    Text(day.formatted(.dateTime.day()))
-                        .font(.system(size: 15, weight: .black, design: .rounded))
-                        .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.80))
-
-                    Circle()
-                        .fill(isToday ? AnyShapeStyle(LColors.neutralPearl.opacity(0.82)) : AnyShapeStyle(Color.clear))
-                        .frame(width: 4, height: 4)
-                }
+                Circle()
+                    .fill(isToday ? AnyShapeStyle(LColors.neutralPearl.opacity(0.82)) : AnyShapeStyle(Color.clear))
+                    .frame(width: 4, height: 4)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 58)
+            .background {
+                if isSelected {
+                    BubblyIconMaterial(tint: accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                } else {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(theme.palette.surface)
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? accent : theme.palette.textPrimary.opacity(0.12),
+                        lineWidth: 1
+                    )
+            }
         }
         .buttonStyle(.plain)
+    }
+
+    private func agendaDatePickerSurface<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+
+        return content()
+            .padding(12)
+            .background {
+                shape
+                    .fill(theme.palette.surface)
+                    .overlay {
+                        shape.strokeBorder(LColors.glassBorder, lineWidth: 1)
+                    }
+            }
+    }
+
+    private func dayAccent(for day: Date) -> Color {
+        let weekdayIndex = max(0, calendar.component(.weekday, from: day) - 1)
+        let rotation = theme.palette.rotation
+        guard !rotation.isEmpty else { return theme.palette.primaryAction }
+        return rotation[weekdayIndex % rotation.count]
     }
 
     private func moveWeek(by value: Int) {
@@ -183,12 +221,12 @@ struct LureliaAgendaView: View {
                     .frame(height: 28)
                     .fixedSize(horizontal: true, vertical: false)
                     .background {
+                        BubblyIconMaterial(tint: theme.palette.indicators)
+                            .clipShape(Capsule(style: .continuous))
+                    }
+                    .overlay {
                         Capsule(style: .continuous)
-                            .fill(LColors.neutralGlassHighlight.opacity(0.045))
-                            .overlay {
-                                Capsule(style: .continuous)
-                                    .strokeBorder(LColors.neutralGlassHighlight.opacity(0.22), lineWidth: 1)
-                            }
+                            .strokeBorder(theme.palette.indicators, lineWidth: 1)
                     }
             }
             .buttonStyle(.plain)
@@ -232,15 +270,22 @@ struct LureliaAgendaView: View {
                 .padding(.bottom, 8)
 
             VStack(alignment: .leading, spacing: 16) {
-                ForEach(groupedRows) { group in
-                    timelineMarker(title: group.label)
+                ForEach(Array(groupedRows.enumerated()), id: \.element.id) { index, group in
+                    timelineMarker(
+                        title: group.label,
+                        accent: timelineAccent(at: index)
+                    )
 
                     ForEach(group.rows) { row in
                         HStack(spacing: 0) {
                             Color.clear
                                 .frame(width: 48)
 
-                            LureliaEventOccurrenceRow(row: row, onSelect: onSelect)
+                            LureliaEventOccurrenceRow(
+                                row: row,
+                                onSelect: onSelect,
+                                onDelete: onDelete
+                            )
                         }
                     }
                 }
@@ -248,17 +293,17 @@ struct LureliaAgendaView: View {
         }
     }
 
-    private func timelineMarker(title: String) -> some View {
+    private func timelineMarker(title: String, accent: Color) -> some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle()
-                    .fill(LColors.neutralPearl.opacity(0.78))
-                    .frame(width: 14, height: 14)
+                BubblyIconMaterial(tint: accent)
+                    .clipShape(Circle())
 
                 Circle()
-                    .strokeBorder(LColors.neutralPearl.opacity(0.32), lineWidth: 1)
-                    .frame(width: 14, height: 14)
+                    .strokeBorder(lineWidth: 1)
+                    .bubblyIconMaterial(tint: accent)
             }
+            .frame(width: 14, height: 14)
             .frame(width: 38)
 
             Text(title)
@@ -268,6 +313,12 @@ struct LureliaAgendaView: View {
 
             Spacer()
         }
+    }
+
+    private func timelineAccent(at index: Int) -> Color {
+        let rotation = theme.palette.rotation
+        guard !rotation.isEmpty else { return theme.palette.primaryAction }
+        return rotation[index % rotation.count]
     }
 
     private var groupedRows: [TimeGroup] {

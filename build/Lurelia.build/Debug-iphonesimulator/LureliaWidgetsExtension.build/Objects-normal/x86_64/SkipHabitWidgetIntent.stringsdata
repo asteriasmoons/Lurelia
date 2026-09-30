@@ -1,0 +1,32 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/SkipHabitWidgetIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Skip Habit",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 12
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skips a habit for today from the widget.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 13
+        }
+      },
+      {
+        "comment": "",
+        "key": "Habit ID",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 15
+        }
+      }
+    ]
+  },
+  "version": 1
+}

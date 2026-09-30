@@ -23,8 +23,10 @@ struct HostPostListView: View {
     let currentUserID: String
     let currentDisplayName: String
     let canModerate: Bool
+    let tint: Color
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @StateObject private var service = SharedEventsService.shared
 
     @State private var posts: [EventPostDTO] = []
@@ -42,7 +44,8 @@ struct HostPostListView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
@@ -65,6 +68,7 @@ struct HostPostListView: View {
                 .padding(.horizontal, LSpacing.pageHorizontal)
             }
         }
+        .presentationBackground(theme.palette.background)
         .task { await reload() }
         .sheet(item: $openedPost) { post in
             HostPostRenderedView(
@@ -113,6 +117,7 @@ struct HostPostListView: View {
                 kind: .post,
                 sharedEventID: eventID,
                 currentUserID: currentUserID,
+                tint: tint,
                 initialTitle: previewText(for: post).text,
                 initialMarkdown: post.bodyMarkdown,
                 initialIsPinned: post.isPinned,
@@ -129,6 +134,7 @@ struct HostPostListView: View {
                 kind: .announcement,
                 sharedEventID: eventID,
                 currentUserID: currentUserID,
+                tint: tint,
                 initialTitle: previewText(for: announcement).text,
                 initialMarkdown: announcement.bodyMarkdown,
                 initialIsPinned: announcement.isPinned,
@@ -163,11 +169,11 @@ struct HostPostListView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 20, height: 20)
-                    .foregroundStyle(LGradients.header)
+                    .frame(width: 24, height: 24)
+                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
                     .frame(width: 38, height: 38)
-                    .background(LColors.glassSurface, in: Circle())
-                    .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
@@ -262,6 +268,7 @@ struct HostPostListView: View {
             createdAt: post.createdAt,
             isPinned: post.isPinned,
             isAnnouncement: false,
+            tint: tint
         )
     }
 
@@ -278,6 +285,7 @@ struct HostPostListView: View {
             createdAt: announcement.createdAt,
             isPinned: announcement.isPinned,
             isAnnouncement: true,
+            tint: tint
         )
     }
 
@@ -292,10 +300,10 @@ struct HostPostListView: View {
     // MARK: State cards
 
     private var loadingCard: some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             HStack {
                 Spacer()
-                ProgressView().tint(LColors.accent)
+                ProgressView().tint(tint)
                 Spacer()
             }
             .padding(.vertical, 24)
@@ -303,7 +311,7 @@ struct HostPostListView: View {
     }
 
     private var emptyCard: some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Nothing here yet")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -316,7 +324,7 @@ struct HostPostListView: View {
     }
 
     private func errorCard(_ err: String) -> some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Couldn't load posts")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -327,6 +335,21 @@ struct HostPostListView: View {
                     .lineLimit(3)
             }
         }
+    }
+
+    private func stateSurface<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(16)
+            .background(
+                theme.palette.surface,
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(tint, lineWidth: 1)
+            }
     }
 
     private var allEmpty: Bool {

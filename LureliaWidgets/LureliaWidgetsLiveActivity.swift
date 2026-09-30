@@ -39,6 +39,8 @@ struct LureliaWidgetsLiveActivity: Widget {
                 Group {
                     if context.state.isFinished {
                         Text("Done")
+                    } else if context.state.isPaused == true {
+                        Text("Paused")
                     } else {
                         Text(context.state.endDate, style: .timer)
                     }
@@ -59,6 +61,10 @@ struct LureliaWidgetsLiveActivity: Widget {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 12, height: 12)
+                            .foregroundStyle(.white)
+                    } else if context.state.isPaused == true {
+                        Text("II")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
                     } else {
                         Text(context.state.endDate, style: .timer)
@@ -114,6 +120,9 @@ private struct LureliaRoutineLiveActivityLockScreenView: View {
 
                     if context.state.isFinished {
                         Text("Complete")
+                    } else if context.state.isPaused == true {
+                        Text("Paused \(context.state.pausedRemainingText)")
+                            .monospacedDigit()
                     } else {
                         Text(context.state.endDate, style: .timer)
                             .monospacedDigit()
@@ -183,7 +192,11 @@ private struct LureliaRoutineLiveActivityIslandBottom: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(context.state.isFinished ? "Routine complete" : "Running")
+                Text(
+                    context.state.isFinished
+                    ? "Routine complete"
+                    : (context.state.isPaused == true ? "Paused" : "Running")
+                )
                     .font(.system(size: 12, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
 
@@ -191,6 +204,9 @@ private struct LureliaRoutineLiveActivityIslandBottom: View {
 
                 if context.state.isFinished {
                     Text("Done")
+                } else if context.state.isPaused == true {
+                    Text(context.state.pausedRemainingText)
+                        .monospacedDigit()
                 } else {
                     Text(context.state.endDate, style: .timer)
                         .monospacedDigit()
@@ -222,6 +238,14 @@ extension LureliaRoutineActivityAttributes {
 }
 
 extension LureliaRoutineActivityAttributes.ContentState {
+    fileprivate var pausedRemainingText: String {
+        let remaining = max(0, Int(pausedRemainingSeconds ?? 0))
+        let hours = remaining / 3600
+        let minutes = (remaining % 3600) / 60
+        let seconds = remaining % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
     fileprivate static var running: LureliaRoutineActivityAttributes.ContentState {
         LureliaRoutineActivityAttributes.ContentState(
             routineName: "Morning Routine",
@@ -229,7 +253,9 @@ extension LureliaRoutineActivityAttributes.ContentState {
             totalCount: 5,
             endDate: Date().addingTimeInterval(1800),
             isFinished: false,
-            colorHex: "#7d19f7"
+            colorHex: "#7d19f7",
+            isPaused: false,
+            pausedRemainingSeconds: nil
         )
     }
 
@@ -240,7 +266,9 @@ extension LureliaRoutineActivityAttributes.ContentState {
             totalCount: 5,
             endDate: Date(),
             isFinished: true,
-            colorHex: "#7d19f7"
+            colorHex: "#7d19f7",
+            isPaused: false,
+            pausedRemainingSeconds: nil
         )
     }
 }

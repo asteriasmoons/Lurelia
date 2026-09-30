@@ -1,0 +1,40 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/CompleteRoutineWidgetIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Complete Routine",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 12
+        }
+      },
+      {
+        "comment": "",
+        "key": "Completes a pending routine from the widget.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 13
+        }
+      },
+      {
+        "comment": "",
+        "key": "Routine ID",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 15
+        }
+      },
+      {
+        "comment": "",
+        "key": "Phase ID",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 18
+        }
+      }
+    ]
+  },
+  "version": 1
+}

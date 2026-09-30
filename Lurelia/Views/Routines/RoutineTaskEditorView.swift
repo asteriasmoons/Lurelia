@@ -15,6 +15,7 @@ import WidgetKit
 struct RoutineTaskEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Bindable var task: LureliaRoutineTask
     var routineTint: Color = LColors.gradientPurple
@@ -108,7 +109,7 @@ struct RoutineTaskEditorView: View {
     }
 
     private var textColor: Color {
-        .white
+        theme.palette.textPrimary
     }
 
     private var routineFillTextColor: Color {
@@ -118,7 +119,7 @@ struct RoutineTaskEditorView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
                     .routineDismissKeyboardOnTap()
 
@@ -172,13 +173,6 @@ struct RoutineTaskEditorView: View {
             }
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { dismissKeyboard() }
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
-                }
-            }
             .sheet(isPresented: $showTemplatePreview) {
                 // "Save as Template" — opens the template editor directly
                 // with a fresh copy of this task's fields. The task itself
@@ -189,6 +183,7 @@ struct RoutineTaskEditorView: View {
                     isNew: true
                 )
             }
+            .tint(routineTint)
         }
     }
 
@@ -204,24 +199,12 @@ struct RoutineTaskEditorView: View {
 
                 Text("Save as Template")
                     .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.palette.textPrimary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 13)
-            .background(Color.white.opacity(0.06), in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            LColors.gradientBlue.opacity(0.55),
-                            LColors.gradientPurple.opacity(0.55)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    lineWidth: 1
-                )
-            )
+            .background(theme.palette.surface, in: Capsule())
+            .overlay(Capsule().strokeBorder(routineTint, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .disabled(!canSave)
@@ -261,14 +244,18 @@ struct RoutineTaskEditorView: View {
         Button { save() } label: {
             Text("Save Task")
                 .font(.system(size: 15, weight: .black, design: .rounded))
-                .foregroundStyle(canSave ? routineFillTextColor : .white.opacity(0.45))
+                .foregroundStyle(canSave ? routineFillTextColor : theme.palette.textSecondary.opacity(0.45))
                 .wcagContrastLift(on: routineTint, isActive: canSave)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 15)
-                .background(
-                    canSave ? routineTint : Color.white.opacity(0.12),
-                    in: Capsule()
-                )
+                .background {
+                    if canSave {
+                        BubblyCardMaterial(tint: routineTint, cornerRadius: 28)
+                    } else {
+                        Capsule()
+                            .fill(theme.palette.raisedSurface)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .disabled(!canSave)

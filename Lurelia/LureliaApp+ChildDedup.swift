@@ -22,6 +22,7 @@ extension LureliaReminderHistory: LureliaDeduplicatable { var deduplicationID: U
 extension KanbanBoard: LureliaDeduplicatable { var deduplicationID: UUID { id } }
 extension KanbanColumn: LureliaDeduplicatable { var deduplicationID: UUID { id } }
 extension KanbanCard: LureliaDeduplicatable { var deduplicationID: UUID { id } }
+extension KanbanQuickTask: LureliaDeduplicatable { var deduplicationID: UUID { id } }
 extension LureliaRoutineStats: LureliaDeduplicatable { var deduplicationID: UUID { id } }
 extension LureliaJourneyMilestone: LureliaDeduplicatable { var deduplicationID: UUID { id } }
 extension LureliaJourneyStep: LureliaDeduplicatable { var deduplicationID: UUID { id } }
@@ -54,6 +55,7 @@ extension LureliaApp {
         totalDeleted += deduplicateByID(KanbanBoard.self, label: "KanbanBoard", in: context)
         totalDeleted += deduplicateByID(KanbanColumn.self, label: "KanbanColumn", in: context)
         totalDeleted += deduplicateByID(KanbanCard.self, label: "KanbanCard", in: context)
+        totalDeleted += deduplicateByID(KanbanQuickTask.self, label: "KanbanQuickTask", in: context)
         totalDeleted += deduplicateByID(LureliaRoutineStats.self, label: "RoutineStats", in: context)
         totalDeleted += deduplicateByID(LureliaJourneyMilestone.self, label: "Milestone", in: context)
         totalDeleted += deduplicateByID(LureliaJourneyStep.self, label: "Step", in: context)
@@ -276,6 +278,7 @@ extension LureliaApp {
         printCount(of: KanbanBoard.self, label: "KanbanBoards", in: context)
         printCount(of: KanbanColumn.self, label: "KanbanColumns", in: context)
         printCount(of: KanbanCard.self, label: "KanbanCards", in: context)
+        printCount(of: KanbanQuickTask.self, label: "KanbanQuickTasks", in: context)
         printCount(of: LureliaRoutine.self, label: "Routines", in: context)
         printCount(of: LureliaRoutineTask.self, label: "RoutineTasks", in: context)
         printCount(of: LureliaRoutineRun.self, label: "RoutineRuns", in: context)

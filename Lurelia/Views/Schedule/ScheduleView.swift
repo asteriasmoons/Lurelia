@@ -13,6 +13,7 @@ struct KanbanBoardWrapper: Identifiable {
 
 struct ScheduleView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Query(sort: \KanbanBoard.sortOrder) private var boards: [KanbanBoard]
 
@@ -23,7 +24,8 @@ struct ScheduleView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
@@ -44,7 +46,8 @@ struct ScheduleView: View {
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 30, height: 30)
-                                    .foregroundStyle(LGradients.header)
+                                    .foregroundStyle(theme.palette.indicators)
+                                    .bubblyIconMaterial(tint: theme.palette.indicators)
                             }
                             .buttonStyle(.plain)
                         }
@@ -134,11 +137,13 @@ struct ScheduleView: View {
             .padding(.top, 4)
         }
         .padding(22)
-        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 26))
-        .overlay(
-            RoundedRectangle(cornerRadius: 26)
-                .strokeBorder(LColors.glassBorder, lineWidth: 1)
-        )
+        .background {
+            BubblyCardMaterial(
+                tint: theme.palette.surface,
+                cornerRadius: 26
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
     private func deleteBoard(_ board: KanbanBoard) {
@@ -150,6 +155,8 @@ struct ScheduleView: View {
 // MARK: - Board Row Card
 
 struct BoardRowCard: View {
+    @Environment(\.appTheme) private var theme
+
     let board: KanbanBoard
     let onTap: () -> Void
 
@@ -162,13 +169,15 @@ struct BoardRowCard: View {
             HStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(accentColor.opacity(0.16))
+                        .fill(Color.black.opacity(0.68))
                         .frame(width: 54, height: 54)
 
-                    Circle()
-                        .fill(accentColor.opacity(0.18))
-                        .frame(width: 38, height: 38)
-                        .blur(radius: 10)
+                    BubblyIconMaterial(tint: accentColor)
+                        .mask {
+                            Circle()
+                                .strokeBorder(lineWidth: 1.5)
+                        }
+                        .frame(width: 54, height: 54)
 
                     Image(board.icon)
                         .renderingMode(.template)
@@ -176,6 +185,7 @@ struct BoardRowCard: View {
                         .scaledToFit()
                         .frame(width: 28, height: 28)
                         .foregroundStyle(accentColor)
+                        .bubblyIconMaterial(tint: accentColor)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -197,35 +207,18 @@ struct BoardRowCard: View {
             .padding(16)
             .background {
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        accentColor.opacity(0.10),
-                                        Color.white.opacity(0.02)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        accentColor.opacity(0.98),
-                                        accentColor.opacity(0.68),
-                                        Color.white.opacity(0.45)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.4
-                            )
-                    }
+                    .fill(theme.palette.surface)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                BubblyCardMaterial(
+                    tint: accentColor,
+                    cornerRadius: 22
+                )
+                .mask {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .strokeBorder(lineWidth: 1.6)
+                }
             }
         }
         .buttonStyle(.plain)
@@ -281,6 +274,7 @@ struct ScheduleSquareActionCard: View {
 struct CreateBoardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
 
     @Query(sort: \KanbanBoard.sortOrder) private var boards: [KanbanBoard]
 
@@ -306,13 +300,14 @@ struct CreateBoardView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 24) {
 
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(.white.opacity(0.3))
+                        .fill(theme.palette.textSecondary.opacity(0.45))
                         .frame(width: 40, height: 5)
                         .padding(.top, 12)
 
@@ -320,11 +315,11 @@ struct CreateBoardView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(isEditing ? "Edit Board" : "New Board")
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(theme.palette.textPrimary)
 
                             Text(isEditing ? "Update your board name, icon, and color." : "Give your board a name, icon, and color.")
                                 .font(.system(size: 13, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(theme.palette.textSecondary)
                         }
 
                         Spacer()
@@ -335,7 +330,8 @@ struct CreateBoardView: View {
                                 .resizable()
                             .scaledToFit()
                             .frame(width: 28, height: 28)
-                                .foregroundStyle(LColors.textPrimary)
+                                .foregroundStyle(.white)
+                                .bubblyIconMaterial(tint: .white)
                         }
                     }
                     .padding(.horizontal, 24)
@@ -344,25 +340,29 @@ struct CreateBoardView: View {
                     HStack(spacing: 14) {
                         ZStack {
                             Circle()
-                                .fill(LColors.glassSurface2)
+                                .fill(theme.palette.surface)
                                 .frame(width: 54, height: 54)
-                                .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(theme.palette.primaryAction, lineWidth: 1.4)
+                                }
 
                             LureliaIconView(iconId: selectedIcon, size: 30)
-                                .foregroundStyle(LColors.neutralPearl.opacity(0.82))
+                                .foregroundStyle(theme.palette.primaryAction)
+                                .bubblyIconMaterial(tint: theme.palette.primaryAction)
                         }
 
                         Text(name.isEmpty ? "Board Name" : name)
                             .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(name.isEmpty ? LColors.textSecondary : LColors.textPrimary)
+                            .foregroundStyle(name.isEmpty ? theme.palette.textSecondary : theme.palette.textPrimary)
 
                         Spacer()
                     }
                     .padding(18)
-                    .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 20))
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .strokeBorder(LColors.glassBorder, lineWidth: 1.1)
+                            .strokeBorder(theme.palette.primaryAction, lineWidth: 1.2)
                     )
                     .padding(.horizontal, 24)
 
@@ -370,13 +370,13 @@ struct CreateBoardView: View {
                     LureliaFormSection(title: "Board Name") {
                         TextField("e.g. Work, Personal, Health", text: $name)
                             .font(.system(size: 15, design: .rounded))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.palette.textPrimary)
                             .padding(14)
-                            .background(.white.opacity(0.08))
+                            .background(theme.palette.surface)
                             .clipShape(RoundedRectangle(cornerRadius: 14))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1.1)
+                                    .strokeBorder(theme.palette.secondaryAccent, lineWidth: 1.2)
                             )
                     }
 
@@ -386,25 +386,35 @@ struct CreateBoardView: View {
                             showIconPicker = true
                         } label: {
                             HStack(spacing: 12) {
-                                LureliaIconView(iconId: selectedIcon, size: 28)
-                                    .foregroundStyle(LColors.neutralPearl.opacity(0.82))
-                                    .frame(width: 28, height: 28)
+                                ZStack {
+                                    Circle()
+                                        .fill(theme.palette.surface)
+
+                                    Circle()
+                                        .strokeBorder(theme.palette.indicators, lineWidth: 1.3)
+
+                                    LureliaIconView(iconId: selectedIcon, size: 24)
+                                        .foregroundStyle(theme.palette.indicators)
+                                        .bubblyIconMaterial(tint: theme.palette.indicators)
+                                }
+                                .frame(width: 38, height: 38)
 
                                 Text(selectedIcon)
                                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(LColors.textPrimary)
+                                    .foregroundStyle(theme.palette.textPrimary)
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(LColors.textSecondary)
+                                    .foregroundStyle(theme.palette.indicators)
+                                    .bubblyIconMaterial(tint: theme.palette.indicators)
                             }
                             .padding(14)
-                            .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14))
+                            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1.1)
+                                    .strokeBorder(theme.palette.indicators, lineWidth: 1.2)
                             )
                         }
                         .buttonStyle(.plain)
@@ -415,13 +425,13 @@ struct CreateBoardView: View {
                         ColorPicker(selection: $selectedColor, supportsOpacity: false) {
                             Text("Board Color")
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(LColors.textPrimary)
+                                .foregroundStyle(theme.palette.textPrimary)
                         }
                         .padding(14)
-                        .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14))
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(LColors.glassBorder, lineWidth: 1.1)
+                                .strokeBorder(theme.palette.primaryAction, lineWidth: 1.2)
                         )
                     }
 
@@ -430,21 +440,36 @@ struct CreateBoardView: View {
                         save()
                     } label: {
                         HStack(spacing: 10) {
-                            Image(isEditing ? "checkwavy" : "addwavy")
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 14, height: 14)
-                                .foregroundStyle(.white)
+                            ZStack {
+                                Image(isEditing ? "checkwavy" : "addwavy")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundStyle(Color.black.opacity(0.58))
+
+                                Image(isEditing ? "checkwavy" : "addwavy")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .foregroundStyle(.black)
+                                    .bubblyIconMaterial(tint: .black)
+                            }
+                            .frame(width: 14, height: 14)
 
                             Text(isEditing ? "Save Changes" : "Create Board")
                                 .font(.system(size: 16, weight: .black, design: .rounded))
                         }
-                        .foregroundStyle(LColors.textPrimary)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: 60)
-                        .background { LureliaNeutralGlassSurface(cornerRadius: 22) }
-                        .shadow(color: LColors.neutralPearl.opacity(0.10), radius: 18, y: 10)
+                        .background {
+                            BubblyCardMaterial(
+                                tint: theme.palette.secondaryAccent,
+                                cornerRadius: 22
+                            )
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .shadow(color: theme.palette.secondaryAccent.opacity(0.14), radius: 18, y: 10)
                     }
                     .buttonStyle(.plain)
                     .disabled(!canSave)
@@ -458,6 +483,8 @@ struct CreateBoardView: View {
         .sheet(isPresented: $showIconPicker) {
             IconPickerView(selectedIcon: $selectedIcon)
         }
+        .presentationBackground(theme.palette.background)
+        .lureliaDismissKeyboardOnTap()
     }
 
     private func save() {

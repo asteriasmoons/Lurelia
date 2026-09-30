@@ -1,0 +1,65 @@
+{
+  "/Users/asteriasmoons/Desktop/Lurelia/Lurelia/Models/Shared/Host.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Host.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Host.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Host.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Host.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Host.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/Lurelia/Models/Shared/Invitation.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Invitation.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Invitation.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Invitation.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Invitation.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Invitation.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/Lurelia/Models/Shared/NotificationSubscription.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/NotificationSubscription.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/NotificationSubscription.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/NotificationSubscription.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/NotificationSubscription.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/NotificationSubscription.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/Lurelia/Models/Shared/Permissions.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Permissions.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Permissions.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Permissions.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Permissions.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/Permissions.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/SkipReminderWidgetIntent.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipReminderWidgetIntent.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipReminderWidgetIntent.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipReminderWidgetIntent.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipReminderWidgetIntent.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipReminderWidgetIntent.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/SkipRoutineTaskWidgetIntent.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipRoutineTaskWidgetIntent.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipRoutineTaskWidgetIntent.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipRoutineTaskWidgetIntent.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipRoutineTaskWidgetIntent.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/SkipRoutineTaskWidgetIntent.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/TimelineItemWidgetIntents.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineItemWidgetIntents.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineItemWidgetIntents.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineItemWidgetIntents.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineItemWidgetIntents.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineItemWidgetIntents.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/TimelineWidgetShortcuts.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineWidgetShortcuts.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineWidgetShortcuts.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineWidgetShortcuts.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineWidgetShortcuts.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/TimelineWidgetShortcuts.swiftdeps"
+  },
+  "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift" : {
+    "const-values" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/UpcomingEventsWidgetConfigurationIntent.swiftconstvalues",
+    "dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/UpcomingEventsWidgetConfigurationIntent.d",
+    "diagnostics" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/UpcomingEventsWidgetConfigurationIntent.dia",
+    "object" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/UpcomingEventsWidgetConfigurationIntent.o",
+    "swift-dependencies" : "/Users/asteriasmoons/Desktop/Lurelia/build/Lurelia.build/Debug-iphonesimulator/LureliaWidgetsExtension.build/Objects-normal/x86_64/UpcomingEventsWidgetConfigurationIntent.swiftdeps"
+  }
+}

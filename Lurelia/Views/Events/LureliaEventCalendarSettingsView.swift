@@ -3,8 +3,8 @@
 //  Lurelia
 //
 //  Sheet layout matches every other add/edit sheet: title top-left,
-//  xmarkwavy top-right, GlassCard sections with label headers outside,
-//  Done capsule at the bottom.
+//  xmarkwavy top-right, labeled settings sections, and a Done control
+//  at the bottom.
 //
 //  Sections (top to bottom):
 //    1. Default View — LureliaGradientDropdown (Agenda / Month / Week)
@@ -21,6 +21,7 @@ import UIKit
 struct LureliaEventCalendarSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Bindable var settings: UserSettings
     @Query(sort: \LureliaCalendar.name) private var lureliaCalendars: [LureliaCalendar]
@@ -33,7 +34,7 @@ struct LureliaEventCalendarSettingsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
@@ -108,7 +109,8 @@ struct LureliaEventCalendarSettingsView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(LGradients.header)
+                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
@@ -120,14 +122,16 @@ struct LureliaEventCalendarSettingsView: View {
 
     private var defaultViewSection: some View {
         section("Default View", icon: "starcal") {
-            GlassCard {
-                LureliaGradientDropdown(
-                    placeholder: "Agenda",
-                    options: LureliaEventsTab.allCases,
-                    selection: $defaultView,
-                    label: { $0.rawValue }
-                )
-            }
+            LureliaGradientDropdown(
+                placeholder: "Agenda",
+                options: LureliaEventsTab.allCases,
+                selection: $defaultView,
+                label: { $0.rawValue },
+                tint: theme.palette.primaryAction,
+                usesCardMaterial: true,
+                usesDarkTypography: true,
+                iconTint: .black
+            )
         }
     }
 
@@ -135,17 +139,17 @@ struct LureliaEventCalendarSettingsView: View {
 
     private var myCalendarsSection: some View {
         section("My Calendars", icon: "ringstarcal") {
-            GlassCard {
-                if lureliaCalendars.isEmpty {
-                    Text("You haven't created any calendars yet. Tap the calendars icon in the Events header to add one.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    VStack(spacing: 10) {
-                        ForEach(lureliaCalendars) { calendar in
-                            myCalendarRow(calendar)
-                        }
+            if lureliaCalendars.isEmpty {
+                Text("You haven't created any calendars yet. Tap the calendars icon in the Events header to add one.")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(lureliaCalendars) { calendar in
+                        myCalendarRow(calendar)
                     }
                 }
             }
@@ -153,7 +157,9 @@ struct LureliaEventCalendarSettingsView: View {
     }
 
     private func myCalendarRow(_ calendar: LureliaCalendar) -> some View {
-        HStack(spacing: 12) {
+        let calendarColor = Color(lureliaHex: calendar.color)
+
+        return HStack(spacing: 12) {
             visibilityCircleButton(for: calendar)
 
             Button {
@@ -161,8 +167,9 @@ struct LureliaEventCalendarSettingsView: View {
             } label: {
                 HStack(spacing: 10) {
                     Circle()
-                        .fill(Color(lureliaHex: calendar.color))
+                        .fill(calendarColor)
                         .frame(width: 14, height: 14)
+                        .bubblyIconMaterial(tint: calendarColor)
 
                     Text(calendar.name.isEmpty ? "Untitled" : calendar.name)
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -176,7 +183,8 @@ struct LureliaEventCalendarSettingsView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                        .foregroundStyle(LGradients.header)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
                 }
                 .contentShape(Rectangle())
             }
@@ -184,35 +192,33 @@ struct LureliaEventCalendarSettingsView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                .strokeBorder(calendarColor, lineWidth: 1)
         )
     }
 
-    /// Hollow gradient circle when the calendar is hidden; filled gradient
-    /// circle with `checkwavy` when visible. Tap toggles.
+    /// Hollow circle when the calendar is hidden; standalone material
+    /// `checkwavy` when visible. Tap toggles.
     private func visibilityCircleButton(for calendar: LureliaCalendar) -> some View {
         Button {
             calendar.isHidden.toggle()
             try? modelContext.save()
         } label: {
-            ZStack {
+            Group {
                 if calendar.isHidden {
                     Circle()
-                        .strokeBorder(LColors.neutralPearl.opacity(0.52), lineWidth: 2)
-                        .frame(width: 26, height: 26)
+                        .strokeBorder(Color.white.opacity(0.38), lineWidth: 1.5)
+                        .frame(width: 20, height: 20)
                 } else {
-                    LureliaNeutralGlassCircle()
-                        .frame(width: 26, height: 26)
-
                     Image("checkwavy")
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 12, height: 12)
-                        .foregroundStyle(LColors.neutralPearl)
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
                 }
             }
             .frame(width: 32, height: 32)
@@ -241,22 +247,26 @@ struct LureliaEventCalendarSettingsView: View {
 
     private var syncDestinationSection: some View {
         section("Sync To Calendar", icon: "lovecalendar") {
-            GlassCard {
-                if writableAppleCalendars.isEmpty {
-                    Text("No writable Apple calendars available. Add one in the Calendar app to enable sync.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    LureliaGradientDropdown(
-                        placeholder: "Choose a destination calendar",
-                        options: writableAppleCalendars.map(\.id),
-                        selection: syncDestinationBinding,
-                        label: { id in
-                            writableAppleCalendars.first(where: { $0.id == id })?.title ?? id
-                        }
-                    )
-                }
+            if writableAppleCalendars.isEmpty {
+                Text("No writable Apple calendars available. Add one in the Calendar app to enable sync.")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                LureliaGradientDropdown(
+                    placeholder: "Choose a destination calendar",
+                    options: writableAppleCalendars.map(\.id),
+                    selection: syncDestinationBinding,
+                    label: { id in
+                        writableAppleCalendars.first(where: { $0.id == id })?.title ?? id
+                    },
+                    tint: theme.palette.indicators,
+                    usesCardMaterial: true,
+                    usesDarkTypography: true,
+                    iconTint: .black
+                )
             }
         }
     }
@@ -278,33 +288,58 @@ struct LureliaEventCalendarSettingsView: View {
 
     private var appleTogglesSection: some View {
         section("Apple Calendar", icon: "dotscal") {
-            GlassCard {
-                VStack(alignment: .leading, spacing: 14) {
-                    Toggle(isOn: $settings.showAppleCalendarEvents) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Show Apple Calendar Events")
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                            Text("Merge Apple Calendar into Lurelia's views")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                    .tint(Color.white.opacity(0.85))
+            VStack(alignment: .leading, spacing: 16) {
+                calendarToggleRow(
+                    title: "Show Apple Calendar Events",
+                    subtitle: "Merge Apple Calendar into Lurelia's views",
+                    isOn: $settings.showAppleCalendarEvents,
+                    icon: "ringstarcal"
+                )
 
-                    Toggle(isOn: $settings.twoWayAppleCalendarSyncEnabled) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Two-Way Sync")
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                            Text("Import Apple events into Lurelia automatically")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                    .tint(Color.white.opacity(0.85))
-                }
+                calendarToggleRow(
+                    title: "Two-Way Sync",
+                    subtitle: "Import Apple events into Lurelia automatically",
+                    isOn: $settings.twoWayAppleCalendarSyncEnabled,
+                    icon: "cloudsync"
+                )
             }
+            .padding(16)
+            .background {
+                BubblyCardMaterial(tint: theme.palette.surface, cornerRadius: 22)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(theme.palette.secondaryAccent, lineWidth: 1)
+            }
+        }
+    }
+
+    private func calendarToggleRow(
+        title: String,
+        subtitle: String,
+        isOn: Binding<Bool>,
+        icon: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            LureliaSlidingIconToggle(
+                isOn: isOn,
+                iconName: icon,
+                accentColor: theme.palette.secondaryAccent,
+                accessibilityLabel: title,
+                usesIconMaterial: true
+            )
         }
     }
 
@@ -312,16 +347,17 @@ struct LureliaEventCalendarSettingsView: View {
 
     private var visibleAppleCalendarsSection: some View {
         section("Visible Apple Calendars", icon: "starcal") {
-            GlassCard {
-                if eventService.appleCalendars.isEmpty {
-                    Text("No Apple Calendars found.")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.6))
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(eventService.appleCalendars) { calendar in
-                            appleCalendarRow(calendar)
-                        }
+            if eventService.appleCalendars.isEmpty {
+                Text("No Apple Calendars found.")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(eventService.appleCalendars) { calendar in
+                        appleCalendarRow(calendar)
                     }
                 }
             }
@@ -330,13 +366,16 @@ struct LureliaEventCalendarSettingsView: View {
 
     private func appleCalendarRow(_ calendar: LureliaAppleCalendarSource) -> some View {
         let isSelected = selectedIDs.contains(calendar.id)
+        let calendarColor = Color(lureliaHex: calendar.colorHex)
+
         return Button {
             toggle(calendar.id)
         } label: {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(Color(lureliaHex: calendar.colorHex))
+                    .fill(calendarColor)
                     .frame(width: 14, height: 14)
+                    .bubblyIconMaterial(tint: calendarColor)
 
                 Text(calendar.title)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -351,20 +390,21 @@ struct LureliaEventCalendarSettingsView: View {
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .foregroundStyle(LGradients.header)
+                            .foregroundStyle(.white)
+                            .bubblyIconMaterial(tint: .white)
                     } else {
                         Circle()
                             .strokeBorder(Color.white.opacity(0.35), lineWidth: 1.5)
                     }
                 }
-                .frame(width: 18, height: 18)
+                .frame(width: 20, height: 20)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
-            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(theme.palette.raisedSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(calendarColor, lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
@@ -375,29 +415,31 @@ struct LureliaEventCalendarSettingsView: View {
 
     private var connectAppleSection: some View {
         section("Connect Apple", icon: "dotscal") {
-            GlassCard {
-                VStack(alignment: .leading, spacing: 14) {
-                        Text("Apple Calendar is not connected.")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Apple Calendar is not connected.")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
 
-                    Button {
-                        Task {
-                            _ = await eventService.requestCalendarAccess()
-                            selectedIDs = Set(eventService.appleCalendars.map(\.id))
-                            settings.selectedAppleCalendarIDs = Array(selectedIDs)
-                            settings.hasConfiguredAppleCalendarSelection = true
-                        }
-                    } label: {
-                        Text("Connect Apple Calendar")
-                            .font(.system(size: 14, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 46)
-                            .background { LureliaNeutralGlassSurface(cornerRadius: 16) }
+                Button {
+                    Task {
+                        _ = await eventService.requestCalendarAccess()
+                        selectedIDs = Set(eventService.appleCalendars.map(\.id))
+                        settings.selectedAppleCalendarIDs = Array(selectedIDs)
+                        settings.hasConfiguredAppleCalendarSelection = true
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    Text("Connect Apple Calendar")
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(theme.palette.raisedSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+            .background {
+                BubblyCardMaterial(tint: theme.palette.surface, cornerRadius: 22)
             }
         }
     }
@@ -408,14 +450,12 @@ struct LureliaEventCalendarSettingsView: View {
         Button { commitAndDismiss() } label: {
             Text("Done")
                 .font(.system(size: 16, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
-                .background { LureliaNeutralGlassSurface(cornerRadius: 22) }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(LColors.neutralPearl.opacity(0.12), lineWidth: 1)
-                )
+                .background {
+                    BubblyCardMaterial(tint: theme.palette.primaryAction, cornerRadius: 22)
+                }
         }
         .buttonStyle(.plain)
         .padding(.top, 6)
@@ -437,10 +477,12 @@ struct LureliaEventCalendarSettingsView: View {
                     .scaledToFit()
                     .frame(width: 20, height: 20)
                     .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
 
                 Text(title)
                     .font(.system(size: 20, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
 
                 Spacer(minLength: 0)
             }

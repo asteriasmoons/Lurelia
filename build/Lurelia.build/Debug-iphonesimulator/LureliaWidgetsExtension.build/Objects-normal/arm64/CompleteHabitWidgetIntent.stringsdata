@@ -1,0 +1,32 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/CompleteHabitWidgetIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Complete Habit",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 12
+        }
+      },
+      {
+        "comment": "",
+        "key": "Logs a completion for a habit from the widget.",
+        "location": {
+          "startingColumn": 48,
+          "startingLine": 13
+        }
+      },
+      {
+        "comment": "",
+        "key": "Habit ID",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 15
+        }
+      }
+    ]
+  },
+  "version": 1
+}

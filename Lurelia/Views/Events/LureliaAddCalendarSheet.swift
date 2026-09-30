@@ -15,6 +15,7 @@ import UIKit
 struct LureliaAddCalendarSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     /// Optional existing calendar. When non-nil the sheet acts as an editor
     /// (title says "Edit Calendar", save updates in place, delete button
@@ -51,7 +52,7 @@ struct LureliaAddCalendarSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
@@ -111,20 +112,20 @@ struct LureliaAddCalendarSheet: View {
     }
 
     private var nameCard: some View {
-        GlassCard {
+        calendarSurface(border: theme.palette.primaryAction) {
             TextField("Calendar name", text: $name)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(theme.palette.textPrimary)
                 .textInputAutocapitalization(.words)
         }
     }
 
     private var colorCard: some View {
-        GlassCard {
+        calendarSurface(border: theme.palette.secondaryAccent) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("CALENDAR COLOR")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(theme.palette.textSecondary)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 40), spacing: 10)], spacing: 10) {
                     ForEach(palette, id: \.self) { hex in
@@ -199,14 +200,15 @@ struct LureliaAddCalendarSheet: View {
         Button { save() } label: {
             Text(isEditing ? "Save Calendar" : "Create Calendar")
                 .font(.system(size: 16, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
-                .background { LureliaNeutralGlassSurface(cornerRadius: 22) }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(LColors.neutralPearl.opacity(0.12), lineWidth: 1)
-                )
+                .background {
+                    BubblyCardMaterial(
+                        tint: theme.palette.indicators,
+                        cornerRadius: 22
+                    )
+                }
         }
         .buttonStyle(.plain)
         .disabled(!canSave)
@@ -221,13 +223,30 @@ struct LureliaAddCalendarSheet: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                        .strokeBorder(theme.palette.textPrimary.opacity(0.16), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    private func calendarSurface<Content: View>(
+        border: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(LSpacing.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(theme.palette.surface)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(border, lineWidth: 1)
+            }
     }
 
     private func loadIfEditing() {

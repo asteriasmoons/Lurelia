@@ -1,0 +1,48 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/LureliaKanbanTimelineWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Nothing on this board today",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 491
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip %@",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 599
+        }
+      },
+      {
+        "comment": "",
+        "key": "Complete %@",
+        "location": {
+          "startingColumn": 33,
+          "startingLine": 647
+        }
+      },
+      {
+        "comment": "",
+        "key": "Timeline",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 721
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your Kanban Timeline for the day. Long-press → Edit Widget to pick a board.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 722
+        }
+      }
+    ]
+  },
+  "version": 1
+}

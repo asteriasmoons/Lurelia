@@ -4,10 +4,12 @@
 //
 
 import Foundation
+import ActivityKit
 import AlarmKit
 import SQLite3
 import SwiftData
 import UIKit
+import UserNotifications
 
 @available(iOS 26.0, *)
 struct LureliaReminderAlarmMetadata: AlarmMetadata {
@@ -30,6 +32,505 @@ struct LureliaRoutineTaskAlarmMetadata: AlarmMetadata {
     let routineName: String
     let title: String
     let icon: String
+}
+
+enum LureliaRoutineTaskOccurrenceNotifications {
+    static let notificationPrefix = "lurelia.routinetask."
+    static let categoryID = "LURELIA_ROUTINE_TASK"
+
+    private static func sanitized(_ stableID: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
+        let cleaned = stableID.unicodeScalars.map {
+            allowed.contains($0) ? String($0) : "-"
+        }.joined()
+        return cleaned.isEmpty ? UUID().uuidString : cleaned
+    }
+
+    static func notificationBaseID(for task: LureliaRoutineTask) -> String {
+        "\(notificationPrefix)\(sanitized(task.routineScopedTaskID))"
+    }
+
+    static func legacyNotificationBaseID(for task: LureliaRoutineTask) -> String {
+        "\(notificationPrefix)\(sanitized(task.stableTaskID))"
+    }
+
+    @discardableResult
+    static func scheduleUpcomingOccurrences(
+        for task: LureliaRoutineTask,
+        occurrenceCount: Int = 2,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard occurrenceCount > 0,
+              task.notificationsEnabled,
+              task.hasDueTime else {
+            return []
+        }
+
+        var dueDates: [Date] = []
+        var reference = now
+        var attempts = 0
+
+        while dueDates.count < occurrenceCount,
+              attempts < 32,
+              let dueDate = task.nextDueDate(after: reference, calendar: calendar) {
+            reference = dueDate
+            attempts += 1
+
+            guard !isResolvedOccurrence(
+                task,
+                dueDate: dueDate,
+                now: now,
+                calendar: calendar
+            ) else {
+                continue
+            }
+
+            dueDates.append(dueDate)
+        }
+
+        return dueDates.flatMap {
+            scheduleOccurrence(for: task, dueDate: $0, now: now, calendar: calendar)
+        }
+    }
+
+    @discardableResult
+    static func cancelPendingOccurrence(
+        for task: LureliaRoutineTask,
+        on occurrenceDay: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard let dueDate = occurrenceDueDate(for: task, on: occurrenceDay, calendar: calendar),
+              dueDate > now else {
+            return []
+        }
+
+        var identifiers = notificationIDs(for: task, dueDate: dueDate)
+
+        // Remove pre-occurrence-ID requests left by older app versions only
+        // when this is today's still-pending occurrence.
+        if calendar.isDate(dueDate, inSameDayAs: now) {
+            identifiers.append(contentsOf: legacyNotificationIDs(for: task))
+        }
+
+        let uniqueIdentifiers = Array(Set(identifiers))
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: uniqueIdentifiers)
+
+        let removed = Set(uniqueIdentifiers)
+        task.notificationIDs.removeAll { removed.contains($0) }
+        task.updatedAt = now
+
+        if let nextDueDate = task.nextDueDate(after: dueDate, calendar: calendar) {
+            scheduleOccurrence(
+                for: task,
+                dueDate: nextDueDate,
+                now: now,
+                calendar: calendar
+            )
+        }
+
+        return uniqueIdentifiers
+    }
+
+    @discardableResult
+    static func restorePendingOccurrence(
+        for task: LureliaRoutineTask,
+        on occurrenceDay: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [String] {
+        guard let dueDate = occurrenceDueDate(for: task, on: occurrenceDay, calendar: calendar),
+              dueDate > now else {
+            return []
+        }
+
+        return scheduleOccurrence(
+            for: task,
+            dueDate: dueDate,
+            now: now,
+            calendar: calendar
+        )
+    }
+
+    static func cancelAll(for task: LureliaRoutineTask) {
+        let center = UNUserNotificationCenter.current()
+        let knownIDs = Array(Set(task.notificationIDs + legacyNotificationIDs(for: task)))
+
+        center.removePendingNotificationRequests(withIdentifiers: knownIDs)
+        center.removeDeliveredNotifications(withIdentifiers: knownIDs)
+
+        task.notificationIDs = []
+    }
+
+    @discardableResult
+    private static func scheduleOccurrence(
+        for task: LureliaRoutineTask,
+        dueDate: Date,
+        now: Date,
+        calendar: Calendar
+    ) -> [String] {
+        guard task.notificationsEnabled, task.hasDueTime else { return [] }
+
+        let leadOffsets = task.notificationLeadMinutes.isEmpty
+            ? [0]
+            : task.notificationLeadMinutes
+        let requestIDs = notificationIDs(for: task, dueDate: dueDate)
+        var scheduledIDs: [String] = []
+
+        for (index, lead) in leadOffsets.enumerated() {
+            let safeLead = max(0, lead)
+            let fireDate = calendar.date(
+                byAdding: .minute,
+                value: -safeLead,
+                to: dueDate
+            ) ?? dueDate
+
+            guard fireDate > now, requestIDs.indices.contains(index) else { continue }
+
+            let content = UNMutableNotificationContent()
+            content.title = task.title
+            let trimmedNotes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+            content.body = trimmedNotes.isEmpty
+                ? (safeLead > 0 ? "Coming up in \(safeLead) min" : "Time to start")
+                : trimmedNotes
+            content.sound = .default
+            content.categoryIdentifier = categoryID
+            content.userInfo = [
+                "routineTaskStableID": task.stableTaskID,
+                "routineTaskOccurrenceDueAt": dueDate.timeIntervalSince1970,
+                "routineName": task.routine?.name ?? ""
+            ]
+
+            var components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute, .second],
+                from: fireDate
+            )
+            components.second = components.second ?? 0
+            let trigger = UNCalendarNotificationTrigger(
+                dateMatching: components,
+                repeats: false
+            )
+            let requestID = requestIDs[index]
+            let request = UNNotificationRequest(
+                identifier: requestID,
+                content: content,
+                trigger: trigger
+            )
+
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error {
+                    print(
+                        "[RoutineTaskNotifications] Failed to schedule \(requestID): \(error)"
+                    )
+                }
+            }
+            scheduledIDs.append(requestID)
+        }
+
+        if !scheduledIDs.isEmpty {
+            task.notificationIDs = Array(Set(task.notificationIDs + scheduledIDs)).sorted()
+            task.updatedAt = now
+        }
+
+        return scheduledIDs
+    }
+
+    static func occurrenceDueDate(
+        for task: LureliaRoutineTask,
+        on occurrenceDay: Date,
+        calendar: Calendar
+    ) -> Date? {
+        guard task.hasDueTime else { return nil }
+
+        var components = calendar.dateComponents(
+            [.year, .month, .day],
+            from: occurrenceDay
+        )
+        components.hour = task.dueHour
+        components.minute = task.dueMinute
+        components.second = 0
+
+        guard let dueDate = calendar.date(from: components) else { return nil }
+
+        if task.repeatsOnDays,
+           !task.scheduledDays.isEmpty,
+           !task.scheduledDays.contains(calendar.component(.weekday, from: dueDate)) {
+            return nil
+        }
+
+        return dueDate
+    }
+
+    private static func notificationIDs(
+        for task: LureliaRoutineTask,
+        dueDate: Date
+    ) -> [String] {
+        let leadOffsets = task.notificationLeadMinutes.isEmpty
+            ? [0]
+            : task.notificationLeadMinutes
+        let occurrenceToken = Int(dueDate.timeIntervalSince1970)
+        let baseID = notificationBaseID(for: task)
+
+        return leadOffsets.indices.map {
+            "\(baseID).occurrence.\(occurrenceToken).\($0)"
+        }
+    }
+
+    static func isResolvedOccurrence(
+        _ task: LureliaRoutineTask,
+        dueDate: Date,
+        now: Date,
+        calendar: Calendar
+    ) -> Bool {
+        if task.isPending,
+           calendar.isDate(dueDate, inSameDayAs: now) {
+            return false
+        }
+
+        if task.isCompleted,
+           let completedAt = task.completedAt,
+           calendar.isDate(completedAt, inSameDayAs: dueDate) {
+            return true
+        }
+
+        if task.isSkipped,
+           let skippedAt = task.skippedAt,
+           calendar.isDate(skippedAt, inSameDayAs: dueDate) {
+            return true
+        }
+
+        return (task.historyItems ?? []).contains {
+            calendar.isDate($0.date, inSameDayAs: dueDate)
+        }
+    }
+
+    private static func legacyNotificationIDs(for task: LureliaRoutineTask) -> [String] {
+        let currentBaseID = notificationBaseID(for: task)
+        let legacyBaseID = legacyNotificationBaseID(for: task)
+        var identifiers = [currentBaseID, legacyBaseID]
+
+        for index in 0..<20 {
+            identifiers.append("\(currentBaseID).\(index)")
+            identifiers.append("\(legacyBaseID).\(index)")
+        }
+
+        return identifiers
+    }
+}
+
+enum LureliaRoutineTaskOccurrenceAlarms {
+    private struct ScheduleSnapshot: Sendable {
+        let alarmID: UUID
+        let alarmDate: Date
+        let title: String
+        let stableTaskID: String
+        let routineName: String
+        let icon: String
+        let soundName: String?
+    }
+
+    static func scheduleNextOccurrence(
+        for task: LureliaRoutineTask,
+        after reference: Date = Date(),
+        calendar: Calendar = .current
+    ) {
+        guard task.alarmEnabled, task.hasDueTime else { return }
+
+        var cursor = reference
+        var attempts = 0
+
+        while attempts < 32,
+              let dueDate = task.nextDueDate(after: cursor, calendar: calendar) {
+            cursor = dueDate
+            attempts += 1
+
+            guard !LureliaRoutineTaskOccurrenceNotifications.isResolvedOccurrence(
+                task,
+                dueDate: dueDate,
+                now: reference,
+                calendar: calendar
+            ) else {
+                continue
+            }
+
+            schedule(task: task, at: dueDate)
+            return
+        }
+    }
+
+    static func cancelPendingOccurrence(
+        for task: LureliaRoutineTask,
+        on occurrenceDay: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) {
+        guard task.alarmEnabled,
+              let dueDate = LureliaRoutineTaskOccurrenceNotifications.occurrenceDueDate(
+                for: task,
+                on: occurrenceDay,
+                calendar: calendar
+              ),
+              dueDate > now else {
+            return
+        }
+
+        cancelCurrentAlarm(for: task)
+
+        if let nextDueDate = task.nextDueDate(after: dueDate, calendar: calendar) {
+            schedule(task: task, at: nextDueDate)
+        }
+    }
+
+    static func cancelPendingOccurrenceAndWait(
+        for task: LureliaRoutineTask,
+        on occurrenceDay: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) async {
+        guard task.alarmEnabled,
+              let dueDate = LureliaRoutineTaskOccurrenceNotifications.occurrenceDueDate(
+                for: task,
+                on: occurrenceDay,
+                calendar: calendar
+              ),
+              dueDate > now else {
+            return
+        }
+
+        cancelCurrentAlarm(for: task)
+
+        guard let nextDueDate = task.nextDueDate(after: dueDate, calendar: calendar),
+              let snapshot = scheduleSnapshot(for: task, at: nextDueDate) else {
+            return
+        }
+
+        await schedule(snapshot)
+    }
+
+    static func restorePendingOccurrence(
+        for task: LureliaRoutineTask,
+        on occurrenceDay: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) {
+        guard task.alarmEnabled,
+              let dueDate = LureliaRoutineTaskOccurrenceNotifications.occurrenceDueDate(
+                for: task,
+                on: occurrenceDay,
+                calendar: calendar
+              ),
+              dueDate > now else {
+            return
+        }
+
+        cancelCurrentAlarm(for: task)
+        schedule(task: task, at: dueDate)
+    }
+
+    static func cancelAll(for task: LureliaRoutineTask) {
+        cancelCurrentAlarm(for: task)
+    }
+
+    private static func schedule(task: LureliaRoutineTask, at alarmDate: Date) {
+        guard let snapshot = scheduleSnapshot(for: task, at: alarmDate) else { return }
+
+        Task {
+            await schedule(snapshot)
+        }
+    }
+
+    private static func scheduleSnapshot(
+        for task: LureliaRoutineTask,
+        at alarmDate: Date
+    ) -> ScheduleSnapshot? {
+        guard #available(iOS 26.0, *) else { return nil }
+
+        let alarmID: UUID
+        if let raw = task.alarmIDString,
+           let existing = UUID(uuidString: raw) {
+            alarmID = existing
+        } else {
+            alarmID = UUID()
+            task.alarmIDString = alarmID.uuidString
+        }
+
+        return ScheduleSnapshot(
+            alarmID: alarmID,
+            alarmDate: alarmDate,
+            title: task.title,
+            stableTaskID: task.stableTaskID,
+            routineName: task.routine?.name ?? "",
+            icon: task.icon,
+            soundName: task.alarmSoundName?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+        )
+    }
+
+    private static func schedule(_ snapshot: ScheduleSnapshot) async {
+        guard #available(iOS 26.0, *) else { return }
+
+        do {
+            switch AlarmManager.shared.authorizationState {
+            case .authorized:
+                break
+            case .notDetermined:
+                let state = try await AlarmManager.shared.requestAuthorization()
+                guard state == .authorized else { return }
+            case .denied:
+                return
+            @unknown default:
+                return
+            }
+
+            let alert = AlarmPresentation.Alert(
+                title: LocalizedStringResource(stringLiteral: snapshot.title)
+            )
+            let metadata = LureliaRoutineTaskAlarmMetadata(
+                stableTaskID: snapshot.stableTaskID,
+                routineName: snapshot.routineName,
+                title: snapshot.title,
+                icon: snapshot.icon
+            )
+            let attributes = AlarmAttributes(
+                presentation: AlarmPresentation(alert: alert),
+                metadata: metadata,
+                tintColor: LColors.gradientBlue
+            )
+            let sound: AlertConfiguration.AlertSound = snapshot.soundName?.isEmpty == false
+                ? .named(snapshot.soundName!)
+                : .default
+            let configuration = AlarmManager.AlarmConfiguration.alarm(
+                schedule: .fixed(snapshot.alarmDate),
+                attributes: attributes,
+                sound: sound
+            )
+
+            try? AlarmManager.shared.cancel(id: snapshot.alarmID)
+            try await AlarmManager.shared.schedule(
+                id: snapshot.alarmID,
+                configuration: configuration
+            )
+        } catch {
+            print("[RoutineTaskAlarms] Failed to schedule \(snapshot.alarmID): \(error)")
+        }
+    }
+
+    private static func cancelCurrentAlarm(for task: LureliaRoutineTask) {
+        guard #available(iOS 26.0, *),
+              let raw = task.alarmIDString,
+              let alarmID = UUID(uuidString: raw) else {
+            return
+        }
+
+        do {
+            try AlarmManager.shared.cancel(id: alarmID)
+        } catch {
+            print("[RoutineTaskAlarms] Failed to cancel \(alarmID): \(error)")
+        }
+    }
 }
 
 struct LureliaWidgetAppleCalendarSnapshot: Codable, Hashable, Identifiable {
@@ -288,6 +789,7 @@ enum LureliaWidgetShared {
             KanbanBoard.self,
             KanbanColumn.self,
             KanbanCard.self,
+            KanbanQuickTask.self,
             LureliaHabit.self,
             LureliaHabitLog.self,
             LureliaHabitSkip.self,

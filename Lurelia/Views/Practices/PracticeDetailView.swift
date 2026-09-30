@@ -408,7 +408,20 @@ extension PracticeDetailView {
                                 Button {
                                     withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
                                         if routine.allTasksDone {
+                                            let now = Date()
                                             routine.resetTaskStates()
+                                            for task in routine.sortedTasks {
+                                                LureliaRoutineTaskOccurrenceNotifications.restorePendingOccurrence(
+                                                    for: task,
+                                                    on: now,
+                                                    now: now
+                                                )
+                                                LureliaRoutineTaskOccurrenceAlarms.restorePendingOccurrence(
+                                                    for: task,
+                                                    on: now,
+                                                    now: now
+                                                )
+                                            }
                                         } else {
                                             RoutineManager.shared.completeRoutine(
                                                 routine,
@@ -450,7 +463,21 @@ extension PracticeDetailView {
                                 if !routine.allTasksDone {
                                     Button {
                                         withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                            let now = Date()
+                                            let pendingTasks = routine.sortedTasks.filter(\.isPending)
                                             routine.skipRoutine()
+                                            for task in pendingTasks {
+                                                LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+                                                    for: task,
+                                                    on: now,
+                                                    now: now
+                                                )
+                                                LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrence(
+                                                    for: task,
+                                                    on: now,
+                                                    now: now
+                                                )
+                                            }
                                             try? modelContext.save()
                                         }
                                         triggerBanner("\(routine.name) skipped")
@@ -471,7 +498,20 @@ extension PracticeDetailView {
                                 } else {
                                     Button {
                                         withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                                            let now = Date()
                                             routine.resetTaskStates()
+                                            for task in routine.sortedTasks {
+                                                LureliaRoutineTaskOccurrenceNotifications.restorePendingOccurrence(
+                                                    for: task,
+                                                    on: now,
+                                                    now: now
+                                                )
+                                                LureliaRoutineTaskOccurrenceAlarms.restorePendingOccurrence(
+                                                    for: task,
+                                                    on: now,
+                                                    now: now
+                                                )
+                                            }
                                             try? modelContext.save()
                                         }
                                         triggerBanner("Tasks reset!")

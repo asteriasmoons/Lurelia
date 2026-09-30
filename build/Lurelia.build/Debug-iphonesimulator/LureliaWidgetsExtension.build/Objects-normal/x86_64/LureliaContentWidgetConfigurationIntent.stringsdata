@@ -1,0 +1,24 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/LureliaContentWidgetConfigurationIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Lurelia Content",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 10
+        }
+      },
+      {
+        "comment": "",
+        "key": "Shows current Lurelia content without extra configuration.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 12
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -9,6 +9,7 @@ import SwiftData
 struct LureliaReminderHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @State private var selectedDate = Date()
     @State private var visibleMonth = Date()
@@ -59,7 +60,7 @@ struct LureliaReminderHistoryView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .top) {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -105,7 +106,8 @@ struct LureliaReminderHistoryView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(LGradients.header)
+                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
@@ -116,8 +118,7 @@ struct LureliaReminderHistoryView: View {
     }
 
     private var calendarCard: some View {
-        GlassCard {
-            VStack(spacing: 14) {
+        VStack(spacing: 14) {
                 HStack {
                     Button {
                         moveMonth(-1)
@@ -126,7 +127,8 @@ struct LureliaReminderHistoryView: View {
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .foregroundStyle(LGradients.header)
+                            .foregroundStyle(theme.palette.primaryAction)
+                            .bubblyIconMaterial(tint: theme.palette.primaryAction)
                             .frame(width: 20, height: 20)
                     }
                     .buttonStyle(.plain)
@@ -146,7 +148,8 @@ struct LureliaReminderHistoryView: View {
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .foregroundStyle(LGradients.header)
+                            .foregroundStyle(theme.palette.primaryAction)
+                            .bubblyIconMaterial(tint: theme.palette.primaryAction)
                             .frame(width: 20, height: 20)
                     }
                     .buttonStyle(.plain)
@@ -174,7 +177,12 @@ struct LureliaReminderHistoryView: View {
                         }
                     }
                 }
-            }
+        }
+        .padding(18)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
         }
     }
 
@@ -190,23 +198,27 @@ struct LureliaReminderHistoryView: View {
             ZStack(alignment: .bottom) {
                 Text("\(cal.component(.day, from: day))")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundStyle(isSelected ? LColors.bg : .white.opacity(isToday ? 1 : 0.78))
+                    .foregroundStyle(isSelected ? Color.black : theme.palette.textPrimary.opacity(isToday ? 1 : 0.78))
                     .frame(width: 34, height: 34)
-                    .background(
-                        isSelected ? AnyShapeStyle(LGradients.header) : AnyShapeStyle(Color.white.opacity(0.06)),
-                        in: Circle()
-                    )
+                    .background {
+                        if isSelected {
+                            BubblyIconMaterial(tint: theme.palette.indicators)
+                                .clipShape(Circle())
+                        } else {
+                            Circle().fill(theme.palette.surface)
+                        }
+                    }
                     .overlay {
                         Circle()
                             .strokeBorder(
-                                isToday && !isSelected ? AnyShapeStyle(LGradients.header) : AnyShapeStyle(Color.clear),
+                                isToday && !isSelected ? AnyShapeStyle(theme.palette.indicators) : AnyShapeStyle(Color.clear),
                                 lineWidth: 1.2
                             )
                     }
 
                 if dayHasEntries {
                     Circle()
-                        .fill(isSelected ? LColors.bg.opacity(0.85) : Color.white.opacity(0.85))
+                        .fill(isSelected ? Color.black.opacity(0.85) : theme.palette.textPrimary.opacity(0.85))
                         .frame(width: 4, height: 4)
                         .offset(y: -3)
                 }
@@ -229,7 +241,8 @@ struct LureliaReminderHistoryView: View {
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .foregroundStyle(LGradients.header)
+                .foregroundStyle(.white)
+                .bubblyIconMaterial(tint: .white)
                 .frame(width: 56, height: 56)
 
             Text("No History This Day")
@@ -245,20 +258,23 @@ struct LureliaReminderHistoryView: View {
     }
 
     private func historyRow(_ entry: LureliaReminderHistory) -> some View {
-        GlassCard {
-            HStack(spacing: 12) {
+        let tint = entry.reminder?.color ?? theme.palette.indicators
+
+        return HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(.white.opacity(0.10))
+                        .fill(Color.black.opacity(0.42))
 
                     Circle()
-                        .strokeBorder(LGradients.header, lineWidth: 1.4)
+                        .strokeBorder(tint, lineWidth: 1.4)
+                        .bubblyIconMaterial(tint: tint)
 
                     Image(entry.reminderIcon.isEmpty ? "bellfill" : entry.reminderIcon)
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .foregroundStyle(.white)
+                        .foregroundStyle(tint)
+                        .bubblyIconMaterial(tint: tint)
                         .padding(9)
                 }
                 .frame(width: 46, height: 46)
@@ -284,15 +300,21 @@ struct LureliaReminderHistoryView: View {
 
                 Text(entry.action.rawValue)
                     .font(.system(size: 11, weight: .black, design: .rounded))
-                    .foregroundStyle(LGradients.header)
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(LGradients.header.opacity(0.13), in: Capsule(style: .continuous))
+                    .background {
+                        BubblyIconMaterial(tint: tint)
+                            .clipShape(Capsule(style: .continuous))
+                    }
                     .overlay {
                         Capsule(style: .continuous)
-                            .strokeBorder(LGradients.header, lineWidth: 1)
+                            .strokeBorder(tint, lineWidth: 1)
                     }
-            }
+        }
+        .padding(16)
+        .background {
+            BubblyCardMaterial(tint: tint, cornerRadius: 22)
         }
         .contextMenu {
             Button(role: .destructive) {

@@ -10,13 +10,15 @@ import WidgetKit
 struct RoutinesView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
 
     @Query(sort: \LureliaRoutine.sortOrder)
     private var routines: [LureliaRoutine]
 
-    @State private var showAdd = false
     @State private var activeRoutine: LureliaRoutine? = nil
-    @State private var editRoutine: LureliaRoutine? = nil
+    @State private var routineColorSelection: RoutineEditorLaunchRequest?
+    @State private var queuedRoutineEditor: RoutineEditorLaunchRequest?
+    @State private var routineEditor: RoutineEditorLaunchRequest?
     @State private var showTemplateLibrary = false
     @State private var showContracts = false
 
@@ -64,6 +66,7 @@ struct RoutinesView: View {
                                         .scaledToFit()
                                         .frame(width: 25, height: 25)
                                         .foregroundStyle(.white)
+                                        .bubblyIconMaterial(tint: theme.palette.primaryAction)
                                         .padding(.trailing, 6)
                                 }
                                 .buttonStyle(.plain)
@@ -78,13 +81,14 @@ struct RoutinesView: View {
                                         .scaledToFit()
                                         .frame(width: 26, height: 26)
                                         .foregroundStyle(.white)
+                                        .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
                                         .padding(.trailing, 6)
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Task Templates")
 
                                 Button {
-                                    showAdd = true
+                                    beginRoutineEditor(for: nil)
                                 } label: {
                                     Image("addwavy")
                                         .renderingMode(.template)
@@ -92,6 +96,7 @@ struct RoutinesView: View {
                                         .scaledToFit()
                                         .frame(width: 30, height: 30)
                                         .foregroundStyle(.white)
+                                        .bubblyIconMaterial(tint: theme.palette.indicators)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -134,7 +139,7 @@ struct RoutinesView: View {
                                                     }
                                                 },
                                                 onEdit: {
-                                                    editRoutine = routine
+                                                    beginRoutineEditor(for: routine)
                                                 },
                                                 fixedWidth: cardWidth
                                             )
@@ -159,11 +164,19 @@ struct RoutinesView: View {
                     .routinePageScrollClipped()
                 }
             }
-            .sheet(isPresented: $showAdd) {
-                AddRoutineView()
+            .sheet(item: $routineColorSelection, onDismiss: presentQueuedRoutineEditor) { request in
+                RoutineColorSelectionSheet(initialColor: request.color) { color in
+                    queuedRoutineEditor = RoutineEditorLaunchRequest(
+                        routine: request.routine,
+                        color: color
+                    )
+                }
             }
-            .sheet(item: $editRoutine) { routine in
-                AddRoutineView(editingRoutine: routine)
+            .sheet(item: $routineEditor) { request in
+                AddRoutineView(
+                    editingRoutine: request.routine,
+                    initialColor: request.color
+                )
             }
             .sheet(isPresented: $showTemplateLibrary) {
                 RoutineTaskTemplateLibraryView()
@@ -201,13 +214,35 @@ struct RoutinesView: View {
         modelContext.processPendingChanges()
     }
 
+    private func beginRoutineEditor(for routine: LureliaRoutine?) {
+        queuedRoutineEditor = nil
+        routineColorSelection = RoutineEditorLaunchRequest(
+            routine: routine,
+            color: routine.map { Color(lureliaHex: $0.colorHex) } ?? theme.palette.primaryAction
+        )
+    }
+
+    private func presentQueuedRoutineEditor() {
+        guard let queuedRoutineEditor else { return }
+        self.queuedRoutineEditor = nil
+        routineEditor = queuedRoutineEditor
+    }
+
     private func deleteRoutine(_ routine: LureliaRoutine) {
         if activeRoutine?.persistentID == routine.persistentID {
             activeRoutine = nil
         }
 
-        if editRoutine?.persistentID == routine.persistentID {
-            editRoutine = nil
+        if routineColorSelection?.routine?.persistentID == routine.persistentID {
+            routineColorSelection = nil
+        }
+
+        if queuedRoutineEditor?.routine?.persistentID == routine.persistentID {
+            queuedRoutineEditor = nil
+        }
+
+        if routineEditor?.routine?.persistentID == routine.persistentID {
+            routineEditor = nil
         }
 
         modelContext.delete(routine)

@@ -16,6 +16,7 @@ enum LureliaEventsTab: String, CaseIterable, Identifiable {
 
 struct LureliaEventsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
     @Query(sort: \LureliaEvent.startDate) private var events: [LureliaEvent]
     @Query(sort: \LureliaEventTag.name) private var tags: [LureliaEventTag]
     @Query private var settings: [UserSettings]
@@ -29,7 +30,9 @@ struct LureliaEventsView: View {
     @StateObject private var eventService = LureliaEventService.shared
     @State private var selectedTab: LureliaEventsTab = .agenda
     @State private var focusedDate = Date()
-    @State private var showEditor = false
+    @State private var showCalendarGate = false
+    @State private var calendarForNewEvent: LureliaCalendar?
+    @State private var pendingCalendarForNewEvent: LureliaCalendar?
     @State private var editingEvent: LureliaEvent?
     @State private var selectedEvent: LureliaEvent?
     @State private var selectedAppleOccurrence: LureliaExternalCalendarOccurrence?
@@ -132,7 +135,8 @@ struct LureliaEventsView: View {
                                     localOccurrences: localOccurrences,
                                     externalOccurrences: visibleExternalOccurrences,
                                     events: events,
-                                    onSelect: selectOccurrence
+                                    onSelect: selectOccurrence,
+                                    onDelete: deleteOccurrence
                                 )
                             case .month:
                                 LureliaMonthCalendarView(
@@ -140,7 +144,8 @@ struct LureliaEventsView: View {
                                     localOccurrences: localOccurrences,
                                     externalOccurrences: visibleExternalOccurrences,
                                     events: events,
-                                    onSelect: selectOccurrence
+                                    onSelect: selectOccurrence,
+                                    onDelete: deleteOccurrence
                                 )
                             case .week:
                                 LureliaWeekScheduleView(
@@ -148,7 +153,8 @@ struct LureliaEventsView: View {
                                     localOccurrences: localOccurrences,
                                     externalOccurrences: visibleExternalOccurrences,
                                     events: events,
-                                    onSelect: selectOccurrence
+                                    onSelect: selectOccurrence,
+                                    onDelete: deleteOccurrence
                                 )
                             }
                         }
@@ -162,8 +168,25 @@ struct LureliaEventsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
         }
-        .sheet(isPresented: $showEditor) {
-            LureliaEventEditorView(event: nil, tags: tags, settings: settingsObject)
+        .sheet(isPresented: $showCalendarGate, onDismiss: {
+            guard let pendingCalendarForNewEvent else { return }
+            calendarForNewEvent = pendingCalendarForNewEvent
+            self.pendingCalendarForNewEvent = nil
+        }) {
+            LureliaEventCalendarGateSheet { calendar in
+                pendingCalendarForNewEvent = calendar
+                showCalendarGate = false
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $calendarForNewEvent) { calendar in
+            LureliaEventEditorView(
+                event: nil,
+                tags: tags,
+                settings: settingsObject,
+                initialCalendar: calendar
+            )
+            .id(calendar.id)
         }
         .sheet(item: $editingEvent) { event in
             LureliaEventEditorView(event: event, tags: tags, settings: settingsObject)
@@ -333,22 +356,11 @@ struct LureliaEventsView: View {
             Button {
                 showSharedEvents = true
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(LColors.neutralGlassHighlight.opacity(0.045))
-                        .overlay {
-                            Circle()
-                                .strokeBorder(LColors.neutralGlassHighlight.opacity(0.22), lineWidth: 1)
-                        }
-
-                    Image("chatsparkle")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                        .foregroundStyle(LGradients.header)
-                }
-                .frame(width: 38, height: 38)
+                eventHeaderIcon(
+                    "chatsparkle",
+                    size: 24,
+                    tint: theme.palette.primaryAction
+                )
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Shared events")
@@ -356,56 +368,35 @@ struct LureliaEventsView: View {
             Button {
                 showAddCalendar = true
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(LColors.neutralGlassHighlight.opacity(0.045))
-                        .overlay {
-                            Circle()
-                                .strokeBorder(LColors.neutralGlassHighlight.opacity(0.22), lineWidth: 1)
-                        }
-
-                    Image("addwavy")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                        .foregroundStyle(LGradients.header)
-                }
-                .frame(width: 38, height: 38)
+                eventHeaderIcon(
+                    "addwavy",
+                    size: 27,
+                    tint: theme.palette.secondaryAccent
+                )
             }
             .buttonStyle(.plain)
 
             Button {
                 showCalendarSettings = true
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(LColors.neutralGlassHighlight.opacity(0.045))
-                        .overlay {
-                            Circle()
-                                .strokeBorder(LColors.neutralGlassHighlight.opacity(0.22), lineWidth: 1)
-                        }
-
-                    Image("settings")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                        .foregroundStyle(LGradients.header)
-                }
-                .frame(width: 38, height: 38)
+                eventHeaderIcon(
+                    "settings",
+                    size: 24,
+                    tint: theme.palette.indicators
+                )
             }
             .buttonStyle(.plain)
 
             Button {
-                showEditor = true
+                calendarForNewEvent = nil
+                pendingCalendarForNewEvent = nil
+                showCalendarGate = true
             } label: {
-                Image("writingpencil")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(LGradients.header)
+                eventHeaderIcon(
+                    "writingpencil",
+                    size: 28,
+                    tint: theme.palette.primaryAction
+                )
             }
             .buttonStyle(.plain)
         }
@@ -425,23 +416,30 @@ struct LureliaEventsView: View {
                         selectedTab = tab
                     }
                 } label: {
+                    let accent = tabAccent(for: tab)
+
                     ZStack {
-                        LureliaNeutralGlassSurface(cornerRadius: 16, prominence: .surface)
-
                         if selectedTab == tab {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(LColors.neutralGlassHighlight.opacity(0.06))
-
+                            BubblyIconMaterial(tint: accent)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        } else {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(LColors.neutralPearl.opacity(0.55), lineWidth: 1)
+                                .fill(theme.palette.surface)
                         }
 
                         Text(tab.rawValue)
                             .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(selectedTab == tab ? Color.white : Color.white.opacity(0.58))
+                            .foregroundStyle(selectedTab == tab ? Color.black : theme.palette.textSecondary)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 40)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(
+                                selectedTab == tab ? accent : theme.palette.textPrimary.opacity(0.12),
+                                lineWidth: 1
+                            )
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -454,6 +452,32 @@ struct LureliaEventsView: View {
         case .month: return focusedDate.formatted(.dateTime.month(.wide).year())
         case .week: return "Seven-day schedule"
         }
+    }
+
+    private func tabAccent(for tab: LureliaEventsTab) -> Color {
+        switch tab {
+        case .agenda:
+            return theme.palette.primaryAction
+        case .month:
+            return theme.palette.secondaryAccent
+        case .week:
+            return theme.palette.indicators
+        }
+    }
+
+    private func eventHeaderIcon(
+        _ name: String,
+        size: CGFloat,
+        tint: Color
+    ) -> some View {
+        Image(name)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .bubblyIconMaterial(tint: tint)
+            .frame(width: 38, height: 38)
+            .contentShape(Rectangle())
     }
 
     private func selectEvent(_ occurrence: LureliaEventOccurrence) {
@@ -476,6 +500,32 @@ struct LureliaEventsView: View {
         case .apple(let apple):
             selectedAppleOccurrence = apple
         }
+    }
+
+    private func deleteOccurrence(_ occurrence: LureliaEventUnifiedOccurrence) {
+        switch occurrence {
+        case .local(let local):
+            guard let event = events.first(where: { $0.id == local.eventID }) else { return }
+
+            LureliaEventNotificationManager.shared.cancelNotifications(for: event)
+
+            if event.isAppleImportedShadow {
+                if let identifier = event.appleEventIdentifier {
+                    try? eventService.deleteAppleOccurrence(eventIdentifier: identifier)
+                }
+            } else {
+                try? eventService.deleteFromAppleCalendar(event)
+            }
+
+            modelContext.delete(event)
+            try? modelContext.save()
+
+        case .apple(let apple):
+            try? eventService.deleteAppleOccurrence(eventIdentifier: apple.appleEventIdentifier)
+        }
+
+        loadExternalOccurrences()
+        LureliaWidgetReloads.reloadAll()
     }
 
     private func loadExternalOccurrences() {

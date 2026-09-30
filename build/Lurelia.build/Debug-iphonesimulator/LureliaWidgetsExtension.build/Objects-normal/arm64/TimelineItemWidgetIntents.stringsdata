@@ -1,0 +1,56 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/TimelineItemWidgetIntents.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Complete Timeline Item",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 49
+        }
+      },
+      {
+        "comment": "",
+        "key": "Completes the tapped item on the Kanban Timeline widget.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 51
+        }
+      },
+      {
+        "comment": "",
+        "key": "Token",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 58
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip Timeline Item",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 186
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skips the tapped item on the Kanban Timeline widget.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 188
+        }
+      },
+      {
+        "comment": "",
+        "key": "Token",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 193
+        }
+      }
+    ]
+  },
+  "version": 1
+}

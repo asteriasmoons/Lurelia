@@ -306,6 +306,10 @@ struct LureliaKanbanTimelineProvider: AppIntentTimelineProvider {
             // the app timeline expands them per-task via routineTask
             // cards. Nothing to render at this level.
             return nil
+
+        case .quickTask:
+            // Quick Tasks are currently an in-app Kanban Timeline surface.
+            return nil
         }
     }
 
@@ -443,26 +447,24 @@ struct LureliaKanbanTimelineWidgetView: View {
         }
     }
 
-    /// Tint-masked variant. Renders the icon in a single flat color
-    /// (via `Color.mask(Image)`) — great for line-art assets, but on
-    /// solid-fill silhouette assets it paints the whole silhouette as
-    /// one blob. Only use this where the icon is known to be line-art
-    /// (header brand icon, skip glyph, completion checkmark).
+    /// Material-masked row icon. The shared icon material supplies the
+    /// tint treatment while the custom asset remains the exact mask.
     @ViewBuilder
-    private func tintedAssetIcon(
+    private func materialAssetIcon(
         _ name: String,
         tint: Color,
         size: CGFloat
     ) -> some View {
         if let uiImage = LureliaWidgetShared.widgetIcon(for: name) {
-            tint
-                .mask(
+            BubblyIconMaterial(tint: tint)
+                .mask {
                     Image(uiImage: uiImage)
                         .renderingMode(.template)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                )
+                }
                 .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         } else {
             Color.clear.frame(width: size, height: size)
         }
@@ -527,16 +529,10 @@ struct LureliaKanbanTimelineWidgetView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(tint.opacity(0.18))
+        .background {
+            BubblyCardMaterial(tint: tint, cornerRadius: 12)
                 .allowsHitTesting(false)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(tint.opacity(0.42), lineWidth: 1)
-                .allowsHitTesting(false)
-        )
+        }
     }
 
     private func isTerminal(_ status: LureliaWidgetKanbanTimelineStatus) -> Bool {
@@ -549,21 +545,21 @@ struct LureliaKanbanTimelineWidgetView: View {
         _ status: LureliaWidgetKanbanTimelineStatus,
         tint: Color
     ) -> some View {
-        let bgFill: Color
+        let materialTint: Color
         let foreground: Color
         switch status {
         case .dueNow:
-            bgFill = tint.opacity(0.9)
+            materialTint = tint
             foreground = tint.adaptivePrimaryText
         case .completed:
-            bgFill = tint.opacity(0.5)
+            materialTint = tint
             foreground = tint.adaptivePrimaryText
         case .skipped:
-            bgFill = Color.white.opacity(0.14)
-            foreground = .white.opacity(0.75)
+            materialTint = LColors.neutralPearl
+            foreground = .black
         case .soon:
-            bgFill = Color.white.opacity(0.14)
-            foreground = .white
+            materialTint = LColors.neutralPearl
+            foreground = .black
         }
 
         return Text(status.rawValue.uppercased())
@@ -572,9 +568,10 @@ struct LureliaKanbanTimelineWidgetView: View {
             .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous).fill(bgFill)
-            )
+            .background {
+                BubblyIconMaterial(tint: materialTint)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
     }
 
     /// Skip button — structurally identical to the Routines widget's
@@ -611,13 +608,13 @@ struct LureliaKanbanTimelineWidgetView: View {
     private func skipGlyphLabel(tint: Color) -> some View {
         Group {
             if let uiImage = LureliaWidgetShared.widgetIcon(for: "skipwavy") {
-                tint
-                    .mask(
+                BubblyIconMaterial(tint: tint)
+                    .mask {
                         Image(uiImage: uiImage)
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                    )
+                    }
             } else {
                 Color.clear
             }
@@ -667,24 +664,26 @@ struct LureliaKanbanTimelineWidgetView: View {
     }
 
     private func completeCircleLabel(tint: Color, filled: Bool) -> some View {
-        Circle()
-            .strokeBorder(tint, lineWidth: 1.6)
-            .background(Circle().fill(tint.opacity(filled ? 0.9 : 0.16)))
-            .frame(width: 24, height: 24)
-            .overlay {
-                if filled,
-                   let uiImage = LureliaWidgetShared.widgetIcon(for: "checkwavy") {
-                    tint.adaptivePrimaryText
-                        .mask(
-                            Image(uiImage: uiImage)
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                        )
-                        .frame(width: 12, height: 12)
+        ZStack {
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Circle().strokeBorder(lineWidth: 1.6)
                 }
+
+            if filled,
+               let uiImage = LureliaWidgetShared.widgetIcon(for: "checkwavy") {
+                tint.adaptivePrimaryText
+                    .mask(
+                        Image(uiImage: uiImage)
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                    )
+                    .frame(width: 12, height: 12)
             }
-            .contentShape(Circle())
+        }
+        .frame(width: 24, height: 24)
+        .contentShape(Circle())
     }
 
     @ViewBuilder
@@ -696,9 +695,9 @@ struct LureliaKanbanTimelineWidgetView: View {
         // they rendered before. The white template silhouette exported
         // by the app gets colorized via `Color.mask(Image)`.
         if LureliaWidgetShared.widgetIcon(for: iconName) != nil {
-            tintedAssetIcon(iconName, tint: tint, size: size)
+            materialAssetIcon(iconName, tint: tint, size: size)
         } else {
-            tintedAssetIcon("sparkle", tint: tint, size: size)
+            materialAssetIcon("sparkle", tint: tint, size: size)
         }
     }
 }

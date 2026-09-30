@@ -585,7 +585,7 @@ struct LureliaUpcomingEventsWidgetView: View {
                 HStack(spacing: 5) {
                     Text(timeString(for: event))
                         .font(.system(size: 10, weight: .black, design: .rounded))
-                        .foregroundStyle(tint)
+                        .bubblyIconMaterial(tint: tint)
 
                     if let calendarName = event.calendarName {
                         Text("·")
@@ -606,35 +606,11 @@ struct LureliaUpcomingEventsWidgetView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background { widgetEventCardSurface(tint: tint, cornerRadius: 14) }
-        .shadow(color: tint.opacity(0.12), radius: 10, y: 5)
     }
 
     private func widgetEventCardSurface(tint: Color, cornerRadius: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-
-        return shape
-            .fill(Color.black.opacity(0.36))
-            .background(.ultraThinMaterial, in: shape)
-            .overlay {
-                shape
-                    .fill(tint.opacity(0.24))
-            }
-            .overlay {
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.12),
-                        tint.opacity(0.12),
-                        Color.black.opacity(0.10)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .clipShape(shape)
-            }
-            .overlay {
-                shape
-                    .strokeBorder(tint.opacity(0.58), lineWidth: 1)
-            }
+        BubblyCardMaterial(tint: tint, cornerRadius: cornerRadius)
+            .allowsHitTesting(false)
     }
 
     /// Compact time label: All-day, today/tomorrow shortcuts, or the
@@ -676,39 +652,44 @@ struct LureliaUpcomingEventsWidgetView: View {
                 resolvedIconName: iconName,
                 renderPath: "requested-widget-png"
             )
-            tint
-                .mask(
+            BubblyIconMaterial(tint: tint)
+                .mask {
                     Image(uiImage: uiImage)
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                )
+                }
                 .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         } else if let fallbackImage = LureliaWidgetShared.widgetIcon(for: "starcal") {
             let _ = debugWidgetIconRender(
                 requestedName: name,
                 resolvedIconName: iconName,
                 renderPath: "starcal-widget-png-fallback"
             )
-            tint
-                .mask(
+            BubblyIconMaterial(tint: tint)
+                .mask {
                     Image(uiImage: fallbackImage)
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                )
+                }
                 .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         } else {
             let _ = debugWidgetIconRender(
                 requestedName: name,
                 resolvedIconName: iconName,
                 renderPath: "system-calendar-fallback"
             )
-            Image(systemName: "calendar")
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(tint)
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Image(systemName: "calendar")
+                        .resizable()
+                        .scaledToFit()
+                }
                 .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         }
     }
 }

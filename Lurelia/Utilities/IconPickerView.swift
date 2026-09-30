@@ -15,6 +15,7 @@ struct IconPickerView: View {
     var onSelection: ((String) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
 
     @State private var searchText = ""
     @State private var selectedCategory = ""
@@ -69,7 +70,8 @@ struct IconPickerView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 18, pinnedViews: []) {
@@ -82,18 +84,18 @@ struct IconPickerView: View {
                         HStack {
                             Text(isSearching ? "Search Results" : activeCategory)
                                 .font(.system(size: 13, weight: .black, design: .rounded))
-                                .foregroundStyle(LColors.textSecondary)
+                                .foregroundStyle(theme.palette.textSecondary)
 
                             Spacer()
 
                             Text(resultCountText)
                                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                .foregroundStyle(LColors.textSecondary.opacity(0.62))
+                                .foregroundStyle(theme.palette.textSecondary.opacity(0.62))
                         }
 
                         LazyVGrid(
                             columns: [
-                                GridItem(.adaptive(minimum: 48, maximum: 56), spacing: 10)
+                                GridItem(.adaptive(minimum: 44, maximum: 50), spacing: 10)
                             ],
                             spacing: 10
                         ) {
@@ -127,7 +129,7 @@ struct IconPickerView: View {
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.primaryAction)
                 }
             }
             .onAppear {
@@ -142,21 +144,26 @@ struct IconPickerView: View {
     // MARK: - Search Field
 
     private var searchField: some View {
-        GlassCard {
-            HStack(spacing: 8) {
-                Image("searchwavy")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 18, height: 18)
-                    .foregroundStyle(LColors.textSecondary.opacity(0.7))
+        HStack(spacing: 10) {
+            Image("searchwavy")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+                .foregroundStyle(theme.palette.primaryAction)
+                .bubblyIconMaterial(tint: theme.palette.primaryAction)
 
-                TextField("Search icons", text: $searchText)
-                    .font(.system(size: 12, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            TextField("Search icons", text: $searchText)
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
+                .tint(theme.palette.primaryAction)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 50)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
         }
     }
 
@@ -173,11 +180,11 @@ struct IconPickerView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("CATEGORY")
                             .font(.system(size: 10, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary.opacity(0.6))
+                            .foregroundStyle(Color.black.opacity(0.62))
 
                         Text(activeCategory.isEmpty ? "All" : activeCategory)
                             .font(.system(size: 15, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
+                            .foregroundStyle(.black)
                     }
 
                     Spacer()
@@ -187,14 +194,19 @@ struct IconPickerView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 14, height: 14)
-                        .foregroundStyle(LColors.textPrimary)
+                        .foregroundStyle(.black)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 14)
-                .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+                .background {
+                    BubblyCardMaterial(
+                        tint: theme.palette.primaryAction,
+                        cornerRadius: LSpacing.cardRadius
+                    )
+                }
                 .overlay(
                     RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
-                        .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                        .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
                 )
                 .contentShape(Rectangle())
             }
@@ -217,7 +229,7 @@ struct IconPickerView: View {
                     HStack(spacing: 10) {
                         Text(category)
                             .font(.system(size: 14, weight: isActive ? .black : .bold, design: .rounded))
-                            .foregroundStyle(isActive ? LColors.textPrimary : LColors.textSecondary)
+                            .foregroundStyle(isActive ? .black : theme.palette.textSecondary)
                             .lineLimit(1)
 
                         Spacer()
@@ -228,20 +240,32 @@ struct IconPickerView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 14, height: 14)
-                                .foregroundStyle(LColors.textPrimary)
+                                .foregroundStyle(.black)
                         }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        isActive ? LColors.glassSurface2 : LColors.glassSurface,
-                        in: RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous)
-                    )
+                    .background {
+                        if isActive {
+                            BubblyIconMaterial(tint: theme.palette.primaryAction)
+                                .clipShape(
+                                    RoundedRectangle(
+                                        cornerRadius: LSpacing.inputRadius,
+                                        style: .continuous
+                                    )
+                                )
+                        } else {
+                            RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous)
+                                .fill(theme.palette.surface)
+                        }
+                    }
                     .overlay(
                         RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous)
                             .strokeBorder(
-                                isActive ? LColors.glassBorderStrong : LColors.glassBorder,
+                                isActive
+                                    ? theme.palette.primaryAction
+                                    : theme.palette.textPrimary.opacity(0.12),
                                 lineWidth: 1
                             )
                     )
@@ -257,10 +281,15 @@ struct IconPickerView: View {
             .padding(10)
         }
         .frame(maxHeight: 220)
-        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+        .background {
+            BubblyCardMaterial(
+                tint: theme.palette.primaryAction,
+                cornerRadius: LSpacing.cardRadius
+            )
+        }
         .overlay(
             RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
-                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
         )
     }
 
@@ -269,17 +298,20 @@ struct IconPickerView: View {
     private func iconCell(_ icon: LureliaIconItem) -> some View {
         let isSelected = selectedIcon == icon.name
 
-        return LureliaIconGlyph(icon: icon, size: 22)
-            .foregroundStyle(LColors.textPrimary)
-            .frame(width: 48, height: 48)
+        return LureliaIconGlyph(icon: icon, size: 18)
+            .foregroundStyle(theme.palette.primaryAction)
+            .bubblyIconMaterial(tint: theme.palette.primaryAction)
+            .frame(width: 44, height: 44)
             .background(
-                isSelected ? LColors.glassSurface2 : LColors.glassSurface,
+                isSelected ? theme.palette.raisedSurface : theme.palette.surface,
                 in: RoundedRectangle(cornerRadius: LSpacing.inputRadius)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: LSpacing.inputRadius)
                     .strokeBorder(
-                        isSelected ? LColors.glassBorderStrong : LColors.glassBorder,
+                        isSelected
+                            ? theme.palette.primaryAction
+                            : theme.palette.textPrimary.opacity(0.12),
                         lineWidth: isSelected ? 1.5 : 1
                     )
             }

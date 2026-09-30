@@ -7,6 +7,31 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 import Combine
+import UIKit
+
+private func kanbanReadableAccentText(_ tint: Color) -> Color {
+    var hue: CGFloat = 0
+    var saturation: CGFloat = 0
+    var brightness: CGFloat = 0
+    var alpha: CGFloat = 0
+
+    guard UIColor(tint).getHue(
+        &hue,
+        saturation: &saturation,
+        brightness: &brightness,
+        alpha: &alpha
+    ), saturation >= 0.10,
+       (0.68...0.92).contains(hue) else {
+        return tint
+    }
+
+    return Color(
+        hue: Double(hue),
+        saturation: Double(min(saturation * 0.78, 0.72)),
+        brightness: Double(max(brightness, 0.90)),
+        opacity: Double(alpha)
+    )
+}
 
 // MARK: - Kanban Completion Banner
 
@@ -15,13 +40,14 @@ import Combine
 /// completed!" vs "Reminder completed!" vs "Routine task completed!" — the
 /// user shouldn't tap a habit and see a "Reminder completed!" banner.
 enum KanbanCompletionKind {
-    case habit, routineTask, reminder
+    case habit, routineTask, reminder, quickTask
 
     var bannerMessage: String {
         switch self {
         case .habit:       return "Habit completed!"
         case .routineTask: return "Routine task completed!"
         case .reminder:    return "Reminder completed!"
+        case .quickTask:   return "Quick task completed!"
         }
     }
 }
@@ -30,6 +56,7 @@ enum KanbanCompletionKind {
 
 struct KanbanTimelineView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Query(sort: \KanbanBoard.sortOrder)
     private var boards: [KanbanBoard]
@@ -38,17 +65,21 @@ struct KanbanTimelineView: View {
     @Query private var allRoutines: [LureliaRoutine]
     @Query private var allRoutineTasks: [LureliaRoutineTask]
     @Query private var allHabits: [LureliaHabit]
+    @Query private var allQuickTasks: [KanbanQuickTask]
     @Query private var allHabitLogs: [LureliaHabitLog]
     @Query private var settings: [UserSettings]
 
-    @State private var selectedBoardID: UUID?
+    @State private var selectedBoardIDs: Set<UUID> = []
+    @State private var didInitializeBoardSelection = false
     @State private var selectedDay: Date = Date()
+    @State private var isBoardDropdownExpanded = false
     @State private var showCreateBoard = false
     @State private var showAddColumn = false
     @State private var editingColumn: KanbanColumn?
     @State private var createRequest: KanbanCreateRequest?
     @State private var taskCreateRequest: KanbanRoutineTaskCreateRequest?
     @State private var habitCreateRequest: KanbanHabitCreateRequest?
+    @State private var quickTaskCreateRequest: KanbanQuickTaskCreateRequest?
     @State private var showCompletionBanner = false
     @State private var completionBannerMessage: String = "Completed!"
     /// Flips true after the timeline has auto-scrolled to the current time
@@ -83,27 +114,60 @@ struct KanbanTimelineView: View {
     /// completion timestamp was appended).
     @State private var timelineRebuildTick: Int = 0
 
-    private var calendar: Calendar { .current }
+    private var displayedTimelineOccurrenceRows: [String: [KanbanTimelineOccurrence]] {
+        var rows = cachedTimelineOccurrenceRows
 
-    private var selectedBoard: KanbanBoard? {
-        if let selectedBoardID,
-           let board = boards.first(where: { $0.id == selectedBoardID }) {
-            return board
+        for board in selectedBoards {
+            for occurrence in explicitQuickTaskOccurrences(for: board) {
+                guard let column = occurrence.column else { continue }
+                let key = timelineOccurrenceRowKey(
+                    columnID: column.id,
+                    fireDate: occurrence.fireDate
+                )
+
+                if !(rows[key] ?? []).contains(where: { $0.id == occurrence.id }) {
+                    rows[key, default: []].append(occurrence)
+                }
+            }
         }
 
-        return boards.first
+        for key in rows.keys {
+            rows[key]?.sort { left, right in
+                if left.fireDate != right.fireDate {
+                    return left.fireDate < right.fireDate
+                }
+
+                return left.card.sortOrder < right.card.sortOrder
+            }
+        }
+
+        return rows
+    }
+
+    private var displayedTimelineOccurrences: [KanbanTimelineColumnOccurrence] {
+        computeTimelineColumnOccurrences(from: displayedTimelineOccurrenceRows)
+    }
+
+    private var calendar: Calendar { .current }
+
+    private var selectedBoards: [KanbanBoard] {
+        boards.filter { selectedBoardIDs.contains($0.id) }
+    }
+
+    private var selectedBoard: KanbanBoard? {
+        selectedBoards.first
     }
 
     private var boardIDs: [UUID] {
         boards.map(\.id)
     }
 
-    private var defaultTimelineBoardID: UUID? {
-        settings.first?.defaultTimelineBoardID
+    private var defaultTimelineBoardIDs: Set<UUID> {
+        Set(settings.first?.defaultTimelineBoardIDs ?? [])
     }
 
-    private var defaultTimelineBoardIDString: String? {
-        settings.first?.defaultTimelineBoardIDString
+    private var defaultTimelineBoardIDsStorage: Data? {
+        settings.first?.defaultTimelineBoardIDsStorage
     }
 
     private var weekStart: Date {
@@ -122,7 +186,16 @@ struct KanbanTimelineView: View {
     }
 
     private var selectedBoardAccent: Color {
-        Color(lureliaHex: selectedBoard?.colorHex ?? "#03dbfc")
+        guard selectedBoards.count == 1, let selectedBoard else {
+            return theme.palette.primaryAction
+        }
+
+        return Color(lureliaHex: selectedBoard.colorHex)
+    }
+
+    private var selectedBoardPickerTitle: String {
+        guard !boards.isEmpty else { return "No Boards" }
+        return "Showing \(selectedBoards.count) of \(boards.count) Boards"
     }
 
     private var pinnedReminderIDs: Set<String> {
@@ -159,7 +232,8 @@ struct KanbanTimelineView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
 
                 VStack(spacing: 0) {
 
@@ -168,25 +242,9 @@ struct KanbanTimelineView: View {
                     HStack {
                         Text("Kanban Timeline")
                             .font(.system(size: 30, weight: .black, design: .rounded))
-                          .foregroundStyle(.white)
+                            .foregroundStyle(.white)
 
                         Spacer()
-
-                        HStack(spacing: 14) {
-                            Button {
-                                showAddColumn = true
-                            } label: {
-                                Image("addwavy")
-                                    .renderingMode(.template)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 28, height: 28)
-                                 .foregroundStyle(LGradients.header)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(selectedBoard == nil)
-                            .opacity(selectedBoard == nil ? 0.35 : 1)
-                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.top, 59)
@@ -223,7 +281,7 @@ struct KanbanTimelineView: View {
 
                                     LazyVStack(alignment: .leading, spacing: 16) {
 
-                                        timelineMarker(title: "Inbox")
+                                        timelineMarker(title: "Inbox", accentIndex: 0)
 
                                         if !inboxReminders.isEmpty {
                                             HStack(spacing: 0) {
@@ -242,19 +300,22 @@ struct KanbanTimelineView: View {
                                             }
                                         }
 
-                                        if board.sortedColumns.isEmpty {
+                                        if selectedBoards.allSatisfy({ $0.sortedColumns.isEmpty }) {
                                             emptyColumnsState(board: board)
                                                 .padding(.leading, 48)
-                                        } else if cachedTimelineOccurrences.isEmpty {
+                                        } else if displayedTimelineOccurrences.isEmpty {
                                             Text("No cards left for this day.")
                                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                              .foregroundStyle(.white.opacity(0.45))
                                                 .padding(.leading, 48)
                                                 .padding(.vertical, 20)
                                         } else {
-                                            ForEach(cachedTimelineOccurrences) { occurrence in
+                                            ForEach(Array(displayedTimelineOccurrences.enumerated()), id: \.element.id) { index, occurrence in
                                                 VStack(alignment: .leading, spacing: 16) {
-                                                    timelineMarker(title: timelineMarkerLabel(for: occurrence.fireDate))
+                                                    timelineMarker(
+                                                        title: timelineMarkerLabel(for: occurrence),
+                                                        accentIndex: index + 1
+                                                    )
 
                                                     HStack(spacing: 0) {
                                                         Color.clear
@@ -265,7 +326,7 @@ struct KanbanTimelineView: View {
                                                             selectedDay: selectedDay,
                                                             now: timelineNow,
                                                             forcedFireDate: occurrence.fireDate,
-                                                            precomputedOccurrences: cachedTimelineOccurrenceRows[
+                                                            precomputedOccurrences: displayedTimelineOccurrenceRows[
                                                                 timelineOccurrenceRowKey(
                                                                     columnID: occurrence.column.id,
                                                                     fireDate: occurrence.fireDate
@@ -275,11 +336,18 @@ struct KanbanTimelineView: View {
                                                             allRoutines: allRoutines,
                                                             allRoutineTasks: allRoutineTasks,
                                                             allHabits: allHabits,
+                                                            allQuickTasks: allQuickTasks,
                                                             onCreateReminder: {
                                                                 createRequest = KanbanCreateRequest(type: .reminder, column: occurrence.column)
                                                             },
                                                             onCreateHabit: {
                                                                 habitCreateRequest = KanbanHabitCreateRequest(column: occurrence.column)
+                                                            },
+                                                            onCreateQuickTask: {
+                                                                quickTaskCreateRequest = KanbanQuickTaskCreateRequest(
+                                                                    column: occurrence.column,
+                                                                    suggestedDate: selectedDay
+                                                                )
                                                             },
                                                             onAddCard: { type, itemID in
                                                                 pinCard(type: type, itemID: itemID, in: occurrence.column)
@@ -331,6 +399,8 @@ struct KanbanTimelineView: View {
                                             )
                                         }
                                         .buttonStyle(.plain)
+                                        .disabled(selectedBoards.count != 1)
+                                        .opacity(selectedBoards.count == 1 ? 1 : 0.35)
                                         .padding(.leading, 48)
                                     }
                                 }
@@ -354,9 +424,15 @@ struct KanbanTimelineView: View {
                         }
                     }
                 } else {
-                        noBoardsState
-                            .padding(.horizontal, 24)
-                            .padding(.top, 30)
+                        if boards.isEmpty {
+                            noBoardsState
+                                .padding(.horizontal, 24)
+                                .padding(.top, 30)
+                        } else {
+                            noBoardSelectionState
+                                .padding(.horizontal, 24)
+                                .padding(.top, 30)
+                        }
 
                         Spacer()
                     }
@@ -371,6 +447,7 @@ struct KanbanTimelineView: View {
                     createRequest: $createRequest,
                     taskCreateRequest: $taskCreateRequest,
                     habitCreateRequest: $habitCreateRequest,
+                    quickTaskCreateRequest: $quickTaskCreateRequest,
                     showCompletionBanner: $showCompletionBanner,
                     completionBannerMessage: completionBannerMessage,
                     selectedBoard: selectedBoard,
@@ -380,7 +457,8 @@ struct KanbanTimelineView: View {
                     allRoutines: allRoutines,
                     allRoutineTasks: allRoutineTasks,
                     allHabits: allHabits,
-                    defaultTimelineBoardIDString: defaultTimelineBoardIDString,
+                    selectedDay: selectedDay,
+                    defaultTimelineBoardIDsStorage: defaultTimelineBoardIDsStorage,
                     useFullScreenCover: useFullScreenCover,
                     onSyncSelectedBoard: syncSelectedBoard,
                     onPinCard: pinCard
@@ -408,95 +486,179 @@ struct KanbanTimelineView: View {
     // MARK: - Board Picker
 
     private func syncSelectedBoard(with ids: [UUID], preferDefault: Bool) {
-        let savedDefaultID = defaultTimelineBoardID.flatMap { ids.contains($0) ? $0 : nil }
+        let availableIDs = Set(ids)
+        let savedDefaultIDs = defaultTimelineBoardIDs.intersection(availableIDs)
 
-        if selectedBoardID == nil || preferDefault {
-            selectedBoardID = savedDefaultID ?? ids.first
-        } else if let selectedBoardID, !ids.contains(selectedBoardID) {
-            self.selectedBoardID = savedDefaultID ?? ids.first
+        selectedBoardIDs.formIntersection(availableIDs)
+
+        if preferDefault {
+            if defaultTimelineBoardIDsStorage != nil {
+                selectedBoardIDs = savedDefaultIDs
+            } else if !savedDefaultIDs.isEmpty {
+                selectedBoardIDs = savedDefaultIDs
+            } else if !didInitializeBoardSelection, let firstID = ids.first {
+                selectedBoardIDs = [firstID]
+            }
+        } else if !didInitializeBoardSelection, let firstID = ids.first {
+            selectedBoardIDs = savedDefaultIDs.isEmpty ? [firstID] : savedDefaultIDs
+        }
+
+        if !ids.isEmpty {
+            didInitializeBoardSelection = true
         }
     }
 
     private var boardPicker: some View {
-        Menu {
-            ForEach(boards) { board in
-                Button {
-                    selectedBoardID = board.id
-                } label: {
-                    HStack {
-                        if selectedBoardID == board.id {
-                            Image("checkwavy")
-                                .renderingMode(.template)
-                        } else {
-                            Image("circle")
+        VStack(spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
+                    isBoardDropdownExpanded.toggle()
+                }
+            } label: {
+                timelinePickerSurface(cornerRadius: 22, padding: 14) {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(selectedBoardAccent.opacity(0.14))
+                                .frame(width: 38, height: 38)
+
+                            if selectedBoards.count == 1, let selectedBoard {
+                                Image(selectedBoard.icon)
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 19, height: 19)
+                                    .bubblyIconMaterial(tint: selectedBoardAccent)
+                            } else {
+                                Image("starcal")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 19, height: 19)
+                                    .bubblyIconMaterial(tint: theme.palette.indicators)
+                            }
                         }
 
-                        Text(board.name)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("BOARD")
+                                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.35))
+                                .tracking(0.6)
+
+                            Text(selectedBoardPickerTitle)
+                                .font(.system(size: 16, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Image(isBoardDropdownExpanded ? "chevup" : "chevdown")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                            .bubblyIconMaterial(tint: theme.palette.indicators)
                     }
                 }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            if !boards.isEmpty {
-                Divider()
-            }
+            if isBoardDropdownExpanded {
+                timelinePickerSurface(cornerRadius: 18, padding: 6) {
+                    VStack(spacing: 5) {
+                        ForEach(boards) { board in
+                            boardDropdownOption(board)
+                        }
 
-            Button {
-                showCreateBoard = true
-            } label: {
-                HStack {
-                    Image("addwavy")
-                        .renderingMode(.template)
+                        if !boards.isEmpty {
+                            Rectangle()
+                                .fill(LColors.glassBorder)
+                                .frame(height: 1)
+                                .padding(.horizontal, 8)
+                        }
 
-                    Text("Create New Board")
+                        Button {
+                            withAnimation(.spring(response: 0.30, dampingFraction: 0.86)) {
+                                isBoardDropdownExpanded = false
+                            }
+                            showCreateBoard = true
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image("addwavy")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 16, height: 16)
+                                    .bubblyIconMaterial(tint: theme.palette.primaryAction)
+
+                                Text("Create New Board")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+
+                                Spacer()
+                            }
+                            .padding(.horizontal, 10)
+                            .frame(height: 46)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func boardDropdownOption(_ board: KanbanBoard) -> some View {
+        let isSelected = selectedBoardIDs.contains(board.id)
+        let boardAccent = Color(lureliaHex: board.colorHex)
+
+        return Button {
+            if isSelected {
+                selectedBoardIDs.remove(board.id)
+            } else {
+                selectedBoardIDs.insert(board.id)
             }
         } label: {
-            GlassCard(cornerRadius: 22, padding: 14) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(selectedBoardAccent.opacity(0.14))
-                            .frame(width: 38, height: 38)
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(boardAccent.opacity(0.14))
+                        .frame(width: 34, height: 34)
 
-                        if let selectedBoard {
-                            Image(selectedBoard.icon)
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 19, height: 19)
-                              .foregroundStyle(selectedBoardAccent)
-                        } else {
-                            Image("starcal")
-                                .renderingMode(.template)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 19, height: 19)
-                              .foregroundStyle(LGradients.header)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("BOARD")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                          .foregroundStyle(.white.opacity(0.35))
-                            .tracking(0.6)
-
-                        Text(selectedBoard?.name ?? "Choose a Board")
-                            .font(.system(size: 16, weight: .black, design: .rounded))
-                          .foregroundStyle(.white)
-                            .lineLimit(1)
-                    }
-
-                    Spacer()
-
-                    Image("chevdown")
+                    Image(board.icon)
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 18, height: 18)
-                       .foregroundStyle(LGradients.header)
+                        .frame(width: 16, height: 16)
+                        .bubblyIconMaterial(tint: boardAccent)
+                }
+
+                Text(board.name)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                if isSelected {
+                    Image("checkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                        .bubblyIconMaterial(tint: theme.palette.indicators)
                 }
             }
+            .padding(.horizontal, 10)
+            .frame(height: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isSelected ? theme.palette.raisedSurface : Color.clear)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -504,7 +666,7 @@ struct KanbanTimelineView: View {
     // MARK: - Week Row
 
     private var weekRow: some View {
-        GlassCard(cornerRadius: 24, padding: 12) {
+        timelinePickerSurface(cornerRadius: 24, padding: 12) {
             VStack(spacing: 10) {
                 HStack {
                     Button {
@@ -515,7 +677,7 @@ struct KanbanTimelineView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 24, height: 24)
-                          .foregroundStyle(LGradients.header)
+                            .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
                     }
                     .buttonStyle(.plain)
 
@@ -535,7 +697,7 @@ struct KanbanTimelineView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 24, height: 24)
-                          .foregroundStyle(LGradients.header)
+                            .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
                     }
                     .buttonStyle(.plain)
                 }
@@ -549,15 +711,17 @@ struct KanbanTimelineView: View {
         }
     }
 
-    private func timelineMarker(title: String) -> some View {
-        HStack(spacing: 12) {
+    private func timelineMarker(title: String, accentIndex: Int) -> some View {
+        let accent = rotatingThemeAccent(at: accentIndex)
+
+        return HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(LColors.neutralPearl.opacity(0.78))
                     .frame(width: 14, height: 14)
+                    .bubblyIconMaterial(tint: accent)
 
                 Circle()
-                    .strokeBorder(LColors.neutralPearl.opacity(0.32), lineWidth: 1)
+                    .strokeBorder(accent.opacity(0.52), lineWidth: 1)
                     .frame(width: 14, height: 14)
             }
             .frame(width: 38)
@@ -571,7 +735,29 @@ struct KanbanTimelineView: View {
         }
     }
 
-    private func timelineMarkerLabel(for fireDate: Date) -> String {
+    private func timelineMarkerLabel(for occurrence: KanbanTimelineColumnOccurrence) -> String {
+        let fireDate = occurrence.fireDate
+        let rowKey = timelineOccurrenceRowKey(
+            columnID: occurrence.column.id,
+            fireDate: fireDate
+        )
+        let row = displayedTimelineOccurrenceRows[rowKey] ?? []
+        let containsOnlyDateOnlyQuickTasks = !row.isEmpty && row.allSatisfy { item in
+            guard case .quickTask(let id) = item.kind,
+                  let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(id) })
+            else {
+                return false
+            }
+
+            return task.taskTime == nil
+        }
+
+        if containsOnlyDateOnlyQuickTasks {
+            return calendar.isDate(fireDate, inSameDayAs: selectedDay)
+                ? "Any Time"
+                : "Any Time · \(fireDate.formatted(.dateTime.month(.abbreviated).day()))"
+        }
+
         let time = fireDate.formatted(date: .omitted, time: .shortened)
 
         if calendar.isDate(fireDate, inSameDayAs: selectedDay) {
@@ -688,6 +874,13 @@ struct KanbanTimelineView: View {
                     }
                     dates.append(contentsOf: habitDates)
                 }
+
+            case .quickTask:
+                if let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }),
+                   let fireDate = task.timelineDate(calendar: calendar),
+                   calendar.isDate(fireDate, inSameDayAs: selectedDay) {
+                    dates.append(fireDate)
+                }
             }
         }
 
@@ -695,9 +888,7 @@ struct KanbanTimelineView: View {
     }
 
     private var timelineColumns: [KanbanColumn] {
-        guard let board = selectedBoard else { return [] }
-
-        let remainingColumns = board.sortedColumns.filter { column in
+        let remainingColumns = selectedBoards.flatMap(\.sortedColumns).filter { column in
             earliestVisibleFireDate(in: column) != nil
         }
 
@@ -726,6 +917,7 @@ struct KanbanTimelineView: View {
     private func dayButton(_ day: Date) -> some View {
         let isSelected = calendar.isDate(day, inSameDayAs: selectedDay)
         let isToday = calendar.isDateInToday(day)
+        let accent = dayAccent(for: day)
 
         return Button {
             withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
@@ -749,7 +941,8 @@ struct KanbanTimelineView: View {
             .frame(height: 58)
             .background {
                 if isSelected {
-                    LureliaNeutralGlassSurface(cornerRadius: 16)
+                    BubblyIconMaterial(tint: accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 } else {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(LColors.glassSurface)
@@ -757,10 +950,40 @@ struct KanbanTimelineView: View {
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(isSelected ? LColors.neutralPearl.opacity(0.26) : LColors.glassBorder.opacity(0.70), lineWidth: 1)
+                    .strokeBorder(isSelected ? accent : LColors.glassBorder.opacity(0.70), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private func timelinePickerSurface<Content: View>(
+        cornerRadius: CGFloat,
+        padding: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        return content()
+            .padding(padding)
+            .background(
+                shape
+                    .fill(theme.palette.surface)
+                    .overlay {
+                        shape.strokeBorder(LColors.glassBorder, lineWidth: 1)
+                    }
+            )
+    }
+
+    private func dayAccent(for day: Date) -> Color {
+        let sundayBasedIndex = max(0, calendar.component(.weekday, from: day) - 1)
+        return rotatingThemeAccent(at: sundayBasedIndex)
+    }
+
+    private func rotatingThemeAccent(at index: Int) -> Color {
+        let rotation = theme.palette.rotation
+        guard !rotation.isEmpty else { return theme.palette.primaryAction }
+        let normalizedIndex = ((index % rotation.count) + rotation.count) % rotation.count
+        return rotation[normalizedIndex]
     }
 
     private func moveWeek(by value: Int) {
@@ -784,7 +1007,10 @@ struct KanbanTimelineView: View {
     // covers the common in-timeline edit cases; other views' edits will
     // reflect on the next `.onAppear`.
     private var timelineRebuildKey: String {
-        let boardKey = selectedBoardID?.uuidString ?? "nil"
+        let boardKey = selectedBoardIDs
+            .map(\.uuidString)
+            .sorted()
+            .joined(separator: ",")
         let dayKey = "\(Int(selectedDay.timeIntervalSince1970))"
         let cardCount = boards.reduce(0) { acc, board in
             acc + (board.columns?.reduce(0) { $0 + ($1.cards?.count ?? 0) } ?? 0)
@@ -813,6 +1039,12 @@ struct KanbanTimelineView: View {
         for habit in allHabits {
             stateHasher.combine(habit.updatedAt)
         }
+        for task in allQuickTasks {
+            stateHasher.combine(task.updatedAt)
+            stateHasher.combine(task.taskDate)
+            stateHasher.combine(task.taskTime)
+            stateHasher.combine(task.isCompleted)
+        }
         for log in allHabitLogs {
             stateHasher.combine(log.updatedAt)
             stateHasher.combine(log.count)
@@ -820,7 +1052,7 @@ struct KanbanTimelineView: View {
         }
         let stateSig = stateHasher.finalize()
 
-        return "\(boardKey)|\(dayKey)|\(allReminders.count)|\(allRoutines.count)|\(allHabits.count)|\(cardCount)|\(stateSig)|\(timelineRebuildTick)"
+        return "\(boardKey)|\(dayKey)|\(allReminders.count)|\(allRoutines.count)|\(allHabits.count)|\(allQuickTasks.count)|\(cardCount)|\(stateSig)|\(timelineRebuildTick)"
     }
 
     private func rebuildTimelineCache() {
@@ -867,7 +1099,7 @@ struct KanbanTimelineView: View {
         guard calendar.isDateInToday(selectedDay) else { return }
 
         let now = Date()
-        let occurrences = cachedTimelineOccurrences
+        let occurrences = displayedTimelineOccurrences
         guard !occurrences.isEmpty else {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 scrollToNowIfNeeded(using: scrollProxy)
@@ -904,12 +1136,15 @@ struct KanbanTimelineView: View {
     /// instead — this is the expensive counter that `rebuildTimelineCache`
     /// invokes on relevant input changes.
     private func computeSelectedDayScheduledItemCount() -> Int {
-        guard let selectedBoard else {
-            return selectedDayStandaloneReminders.count
+        guard !selectedBoards.isEmpty else {
+            return 0
         }
 
-        let pinnedTaskCount = selectedBoard.sortedColumns
+        let selectedCards = selectedBoards
+            .flatMap(\.sortedColumns)
             .flatMap { $0.sortedCards }
+
+        let pinnedTaskCount = selectedCards
             .filter { card in
                 guard card.cardType == .routineTask,
                       let task = allRoutineTasks.first(where: { $0.matchesKanbanItemID(card.itemID) })
@@ -921,7 +1156,22 @@ struct KanbanTimelineView: View {
             }
             .count
 
-        return selectedDayStandaloneReminders.count + pinnedTaskCount
+        let quickTaskIDs = Set(
+            selectedCards
+                .filter { $0.cardType == .quickTask }
+                .map(\.itemID)
+        )
+        let quickTaskCount = allQuickTasks.filter { task in
+            guard quickTaskIDs.contains(task.kanbanItemID),
+                  let timelineDate = task.timelineDate(calendar: calendar)
+            else {
+                return false
+            }
+
+            return calendar.isDate(timelineDate, inSameDayAs: selectedDay)
+        }.count
+
+        return selectedDayStandaloneReminders.count + pinnedTaskCount + quickTaskCount
     }
 
     private var selectedDayHeader: some View {
@@ -943,13 +1193,16 @@ struct KanbanTimelineView: View {
             } label: {
                 Text("Today")
                     .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.gradientBlue)
+                    .foregroundStyle(theme.palette.textPrimary)
                     .padding(.horizontal, 12)
                     .frame(height: 32)
-                    .background(LColors.gradientBlue.opacity(0.13), in: Capsule())
+                    .background {
+                        BubblyIconMaterial(tint: theme.palette.primaryAction)
+                            .clipShape(Capsule())
+                    }
                     .overlay(
                         Capsule()
-                            .strokeBorder(LColors.gradientBlue.opacity(0.35), lineWidth: 1)
+                            .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)
@@ -990,6 +1243,27 @@ struct KanbanTimelineView: View {
                     .background { LureliaNeutralGlassSurface(cornerRadius: 20) }
             }
             .buttonStyle(.plain)
+        }
+        .padding(24)
+    }
+
+    private var noBoardSelectionState: some View {
+        VStack(spacing: 14) {
+            Image("starcal")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 46, height: 46)
+                .bubblyIconMaterial(tint: theme.palette.indicators)
+
+            Text("No Boards Selected")
+                .font(.system(size: 19, weight: .black, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("Choose one or more boards above to display their timeline cards.")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
         }
         .padding(24)
     }
@@ -1157,35 +1431,58 @@ struct KanbanTimelineView: View {
     /// Delegates to `KanbanTimelineEngine` so the widget target can share
     /// the exact same computation via that engine.
     private func computeTimelineColumnOccurrences() -> [KanbanTimelineColumnOccurrence] {
-        guard let board = selectedBoard else { return [] }
+        var occurrences: [KanbanTimelineColumnOccurrence] = []
 
-        return KanbanTimelineEngine.columnOccurrences(
-            for: board,
-            on: selectedDay,
-            allReminders: allReminders,
-            allRoutines: allRoutines,
-            allRoutineTasks: allRoutineTasks,
-            allHabits: allHabits,
-            calendar: calendar
-        )
+        for board in selectedBoards {
+            occurrences.append(contentsOf: KanbanTimelineEngine.columnOccurrences(
+                for: board,
+                on: selectedDay,
+                allReminders: allReminders,
+                allRoutines: allRoutines,
+                allRoutineTasks: allRoutineTasks,
+                allHabits: allHabits,
+                allQuickTasks: allQuickTasks,
+                calendar: calendar
+            ))
+        }
+
+        return occurrences.sorted { left, right in
+            if left.fireDate != right.fireDate {
+                return left.fireDate < right.fireDate
+            }
+
+            return left.column.sortOrder < right.column.sortOrder
+        }
     }
 
     private func computeTimelineOccurrenceRows() -> [String: [KanbanTimelineOccurrence]] {
-        guard let board = selectedBoard else { return [:] }
+        guard !selectedBoards.isEmpty else { return [:] }
 
         var rows: [String: [KanbanTimelineOccurrence]] = [:]
+        var engineOccurrences: [KanbanTimelineOccurrence] = []
+        var quickTaskOccurrences: [KanbanTimelineOccurrence] = []
 
-        let occurrences = KanbanTimelineEngine.occurrences(
-            for: board,
-            on: selectedDay,
-            allReminders: allReminders,
-            allRoutines: allRoutines,
-            allRoutineTasks: allRoutineTasks,
-            allHabits: allHabits,
-            calendar: calendar
-        )
+        for board in selectedBoards {
+            engineOccurrences.append(contentsOf: KanbanTimelineEngine.occurrences(
+                for: board,
+                on: selectedDay,
+                allReminders: allReminders,
+                allRoutines: allRoutines,
+                allRoutineTasks: allRoutineTasks,
+                allHabits: allHabits,
+                allQuickTasks: allQuickTasks,
+                calendar: calendar
+            ))
+            quickTaskOccurrences.append(contentsOf: explicitQuickTaskOccurrences(for: board))
+        }
 
-        for occurrence in occurrences {
+        var insertedOccurrenceIDs: Set<String> = []
+
+        for occurrence in engineOccurrences + quickTaskOccurrences {
+            guard insertedOccurrenceIDs.insert(occurrence.id).inserted else {
+                continue
+            }
+
             guard let column = occurrence.column else { continue }
             let key = timelineOccurrenceRowKey(
                 columnID: column.id,
@@ -1205,6 +1502,38 @@ struct KanbanTimelineView: View {
         }
 
         return rows
+    }
+
+    private func explicitQuickTaskOccurrences(
+        for board: KanbanBoard
+    ) -> [KanbanTimelineOccurrence] {
+        let quickTasksByID = Dictionary(
+            allQuickTasks.map { ($0.kanbanItemID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var occurrences: [KanbanTimelineOccurrence] = []
+
+        for column in board.sortedColumns {
+            for card in column.sortedCards where card.cardType == .quickTask {
+                guard let task = quickTasksByID[card.itemID],
+                      let fireDate = task.timelineDate(calendar: calendar),
+                      calendar.isDate(fireDate, inSameDayAs: selectedDay)
+                else {
+                    continue
+                }
+
+                occurrences.append(
+                    KanbanTimelineOccurrence(
+                        card: card,
+                        kind: .quickTask(task.kanbanItemID),
+                        fireDate: fireDate,
+                        column: column
+                    )
+                )
+            }
+        }
+
+        return occurrences
     }
 
     private func computeTimelineColumnOccurrences(
@@ -1349,6 +1678,16 @@ struct KanbanTimelineView: View {
                         }
 
                     fireDatesForColumn.append(contentsOf: dates)
+
+                case .quickTask:
+                    guard let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }),
+                          let fireDate = task.timelineDate(calendar: calendar),
+                          calendar.isDate(fireDate, inSameDayAs: selectedDay)
+                    else {
+                        continue
+                    }
+
+                    fireDatesForColumn.append(fireDate)
                 }
             }
 
@@ -1445,6 +1784,7 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
     @Binding var createRequest: KanbanCreateRequest?
     @Binding var taskCreateRequest: KanbanRoutineTaskCreateRequest?
     @Binding var habitCreateRequest: KanbanHabitCreateRequest?
+    @Binding var quickTaskCreateRequest: KanbanQuickTaskCreateRequest?
     @Binding var showCompletionBanner: Bool
     let completionBannerMessage: String
 
@@ -1455,13 +1795,14 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
     let allRoutines: [LureliaRoutine]
     let allRoutineTasks: [LureliaRoutineTask]
     let allHabits: [LureliaHabit]
-    let defaultTimelineBoardIDString: String?
+    let selectedDay: Date
+    let defaultTimelineBoardIDsStorage: Data?
     let useFullScreenCover: Bool
     let onSyncSelectedBoard: ([UUID], Bool) -> Void
     let onPinCard: (KanbanCardType, String, KanbanColumn) -> Void
 
     func body(content: Content) -> some View {
-        content
+        let baseContent = content
             .ignoresSafeArea(edges: .top)
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
@@ -1472,12 +1813,16 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
             .onChange(of: boardIDs) { _, ids in
                 onSyncSelectedBoard(ids, false)
             }
-            .onChange(of: defaultTimelineBoardIDString) { _, _ in
+            .onChange(of: defaultTimelineBoardIDsStorage) { _, _ in
                 onSyncSelectedBoard(boardIDs, true)
             }
+
+        let boardPresentation = baseContent
             .sheet(isPresented: $showCreateBoard) {
                 KanbanTimelineCreateBoardSheet()
             }
+
+        let columnPresentation = boardPresentation
             .sheet(isPresented: Binding(
                 get: { !useFullScreenCover && showAddColumn },
                 set: { showAddColumn = $0 }
@@ -1510,11 +1855,13 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
                     KanbanTimelineColumnSheet(board: selectedBoard, column: column)
                 }
             }
+
+        let reminderPresentation = columnPresentation
             .sheet(item: Binding(
                 get: { useFullScreenCover ? nil : createRequest },
                 set: { createRequest = $0 }
             )) { request in
-                AddReminderView(onCreated: { reminder in
+                LureliaReminderCreationFlow(onCreated: { reminder in
                     reminder.kind = .standalone
                     onPinCard(.reminder, reminder.id.uuidString, request.column)
                 })
@@ -1523,11 +1870,13 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
                 get: { useFullScreenCover ? createRequest : nil },
                 set: { createRequest = $0 }
             )) { request in
-                AddReminderView(onCreated: { reminder in
+                LureliaReminderCreationFlow(onCreated: { reminder in
                     reminder.kind = .standalone
                     onPinCard(.reminder, reminder.id.uuidString, request.column)
                 })
             }
+
+        let routineTaskPresentation = reminderPresentation
             .sheet(item: Binding(
                 get: { useFullScreenCover ? nil : taskCreateRequest },
                 set: { taskCreateRequest = $0 }
@@ -1544,6 +1893,8 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
                     onPinCard(.routineTask, task.kanbanItemID, request.column)
                 }
             }
+
+        let habitPresentation = routineTaskPresentation
             .sheet(item: Binding(
                 get: { useFullScreenCover ? nil : habitCreateRequest },
                 set: { habitCreateRequest = $0 }
@@ -1572,6 +1923,28 @@ private struct KanbanTimelinePresentationModifier: ViewModifier {
                     }
                 )
             }
+
+        let quickTaskPresentation = habitPresentation
+            .sheet(item: Binding(
+                get: { useFullScreenCover ? nil : quickTaskCreateRequest },
+                set: { quickTaskCreateRequest = $0 }
+            )) { request in
+                AddKanbanQuickTaskSheet(
+                    column: request.column,
+                    suggestedDate: request.suggestedDate ?? selectedDay
+                )
+            }
+            .fullScreenCover(item: Binding(
+                get: { useFullScreenCover ? quickTaskCreateRequest : nil },
+                set: { quickTaskCreateRequest = $0 }
+            )) { request in
+                AddKanbanQuickTaskSheet(
+                    column: request.column,
+                    suggestedDate: request.suggestedDate ?? selectedDay
+                )
+            }
+
+        return quickTaskPresentation
             .navigationDestination(for: UUID.self) { reminderID in
                 if let reminder = allReminders.first(where: { $0.id == reminderID }) {
                     ReminderDetailView(reminder: reminder)
@@ -1638,6 +2011,7 @@ struct KanbanTimelineColumnView: View {
     @State private var editingReminder: LureliaReminder?
     @State private var editingRoutineTask: LureliaRoutineTask?
     @State private var editingHabit: LureliaHabit?
+    @Query private var allBoards: [KanbanBoard]
 
     let selectedDay: Date
     /// Shared clock pushed down from the root timeline. Cards use this in
@@ -1651,8 +2025,10 @@ struct KanbanTimelineColumnView: View {
     let allRoutines: [LureliaRoutine]
     let allRoutineTasks: [LureliaRoutineTask]
     let allHabits: [LureliaHabit]
+    let allQuickTasks: [KanbanQuickTask]
     let onCreateReminder: () -> Void
     let onCreateHabit: () -> Void
+    let onCreateQuickTask: () -> Void
     let onAddCard: (KanbanCardType, String) -> Void
     let onAddTask: (LureliaRoutine) -> Void
     let onEditColumn: () -> Void
@@ -1679,6 +2055,10 @@ struct KanbanTimelineColumnView: View {
         )
         let habitsByKanbanID: [String: LureliaHabit] = Dictionary(
             allHabits.map { ($0.kanbanItemID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let quickTasksByKanbanID: [String: KanbanQuickTask] = Dictionary(
+            allQuickTasks.map { ($0.kanbanItemID, $0) },
             uniquingKeysWith: { first, _ in first }
         )
         // Routine tasks: key by composite `kanbanItemID` (routine ID +
@@ -1797,6 +2177,23 @@ struct KanbanTimelineColumnView: View {
                         )
                     )
                 }
+
+            case .quickTask:
+                guard let task = quickTasksByKanbanID[card.itemID],
+                      let fireDate = task.timelineDate(),
+                      Calendar.current.isDate(fireDate, inSameDayAs: forcedFireDate ?? selectedDay),
+                      forcedFireDate == nil || abs(fireDate.timeIntervalSince(forcedFireDate!)) < 60
+                else {
+                    continue
+                }
+
+                occurrences.append(
+                    KanbanTimelineOccurrence(
+                        card: card,
+                        kind: .quickTask(task.kanbanItemID),
+                        fireDate: fireDate
+                    )
+                )
             }
         }
 
@@ -1946,6 +2343,23 @@ struct KanbanTimelineColumnView: View {
                     fireDate: fireDate
                 )
             }
+
+        case .quickTask:
+            guard let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }),
+                  let fireDate = task.timelineDate(),
+                  Calendar.current.isDate(fireDate, inSameDayAs: forcedFireDate ?? selectedDay),
+                  forcedFireDate == nil || abs(fireDate.timeIntervalSince(forcedFireDate!)) < 60
+            else {
+                return []
+            }
+
+            return [
+                KanbanTimelineOccurrence(
+                    card: card,
+                    kind: .quickTask(task.kanbanItemID),
+                    fireDate: fireDate
+                )
+            ]
         }
     }
 
@@ -2002,7 +2416,7 @@ struct KanbanTimelineColumnView: View {
     var body: some View {
         let displayRows = visibleDisplayRows
 
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(column.name)
                     .font(.system(size: 14, weight: .black, design: .rounded))
@@ -2012,7 +2426,7 @@ struct KanbanTimelineColumnView: View {
 
                 Text("\(displayRows.count)")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(accentColor)
+                    .foregroundStyle(kanbanReadableAccentText(accentColor))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(accentColor.opacity(0.14), in: Capsule())
@@ -2024,6 +2438,7 @@ struct KanbanTimelineColumnView: View {
                     allHabits: allHabits,
                     onCreateReminder: onCreateReminder,
                     onCreateHabit: onCreateHabit,
+                    onCreateQuickTask: onCreateQuickTask,
                     onAddCard: onAddCard,
                     onAddTask: onAddTask
                 ) {
@@ -2032,15 +2447,13 @@ struct KanbanTimelineColumnView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 18, height: 18)
-                       .foregroundStyle(LGradients.header)
+                        .foregroundStyle(accentColor)
+                        .bubblyIconMaterial(tint: accentColor)
+                        .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.top, 14)
-
-            Divider()
-                .overlay(LColors.glassBorder)
-                .padding(.horizontal, 10)
+            .padding(.top, 12)
 
             VStack(spacing: 10) {
                 ForEach(displayRows) { row in
@@ -2065,13 +2478,12 @@ struct KanbanTimelineColumnView: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.bottom, 14)
+            .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            LureliaUserChoiceSurface(
+            BubblyCardMaterial(
                 tint: accentColor,
-                role: .supporting,
                 cornerRadius: 22
             )
         }
@@ -2144,6 +2556,28 @@ struct KanbanTimelineColumnView: View {
         }
     }
 
+    private var timelineAllCards: [KanbanCard] {
+        allBoards.flatMap { $0.columns ?? [] }.flatMap { $0.cards ?? [] }
+    }
+
+    private var timelinePinnedReminderIDs: Set<String> {
+        Set(timelineAllCards.filter { $0.cardType == .reminder }.map(\.itemID))
+    }
+
+    private var timelinePinnedRoutineTaskIDs: Set<String> {
+        Set(
+            timelineAllCards
+                .filter { $0.cardType == .routineTask }
+                .compactMap { card in
+                    allRoutineTasks.first { $0.matchesKanbanItemID(card.itemID) }?.kanbanItemID
+                }
+        )
+    }
+
+    private var timelinePinnedHabitIDs: Set<String> {
+        Set(timelineAllCards.filter { $0.cardType == .habit }.map(\.itemID))
+    }
+
     @ViewBuilder
     private func displayRow(_ row: KanbanTimelineDisplayRow) -> some View {
         switch row {
@@ -2156,6 +2590,7 @@ struct KanbanTimelineColumnView: View {
                 allRoutines: allRoutines,
                 allRoutineTasks: allRoutineTasks,
                 allHabits: allHabits,
+                allQuickTasks: allQuickTasks,
                 accent: accentColor,
                 onDelete: { deleteCard(occurrence.card) },
                 onEditReminder: { reminder in
@@ -2206,6 +2641,11 @@ struct KanbanTimelineColumnView: View {
     }
 
     private func deleteCard(_ card: KanbanCard) {
+        if card.cardType == .quickTask,
+           let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }) {
+            modelContext.delete(task)
+        }
+
         modelContext.delete(card)
         try? modelContext.save()
     }
@@ -2227,6 +2667,16 @@ struct KanbanTimelineColumnView: View {
 
     private func moveCard(_ card: KanbanCard, to targetColumn: KanbanColumn) {
         guard targetColumn.id != column.id else { return }
+
+        if card.cardType == .quickTask,
+           let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }) {
+            column.quickTasks = (column.quickTasks ?? []).filter { $0.id != task.id }
+            if targetColumn.quickTasks == nil {
+                targetColumn.quickTasks = []
+            }
+            targetColumn.quickTasks?.append(task)
+            task.updatedAt = Date()
+        }
 
         column.cards = (column.cards ?? []).filter { $0.id != card.id }
 
@@ -2321,6 +2771,7 @@ struct KanbanTimelineOccurrenceCard: View {
     let allRoutines: [LureliaRoutine]
     let allRoutineTasks: [LureliaRoutineTask]
     let allHabits: [LureliaHabit]
+    let allQuickTasks: [KanbanQuickTask]
     let accent: Color
     let onDelete: () -> Void
     let onEditReminder: (LureliaReminder) -> Void
@@ -2399,6 +2850,20 @@ struct KanbanTimelineOccurrenceCard: View {
             } else {
                 orphanCard
             }
+
+        case .quickTask(let id):
+            if let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(id) }),
+               let column = occurrence.column ?? task.column {
+                KanbanTimelineQuickTaskCard(
+                    task: task,
+                    column: column,
+                    accent: accent,
+                    onDelete: onDelete,
+                    onComplete: { onComplete?(.quickTask) }
+                )
+            } else {
+                orphanCard
+            }
         }
     }
 
@@ -2429,7 +2894,194 @@ struct KanbanTimelineOccurrenceCard: View {
     }
 }
 
+// MARK: - Timeline Quick Task Card
+
+struct KanbanTimelineQuickTaskCard: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var task: KanbanQuickTask
+    let column: KanbanColumn
+    let accent: Color
+    let onDelete: () -> Void
+    var onComplete: (() -> Void)? = nil
+
+    @State private var isEditing = false
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            quickTaskIcon
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(task.name)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(task.isCompleted ? Color.black.opacity(0.62) : .white)
+                    .shadow(color: .black.opacity(0.52), radius: 2, x: 0, y: 1)
+                    .strikethrough(task.isCompleted, color: Color.black.opacity(0.48))
+                    .lineLimit(1)
+
+                if !task.details.isEmpty {
+                    Text(task.details)
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(task.isCompleted ? Color.black.opacity(0.52) : .white.opacity(0.78))
+                        .shadow(color: .black.opacity(0.34), radius: 1.5, x: 0, y: 1)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer(minLength: 6)
+            actionControls
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 70, alignment: .leading)
+        .background {
+            ZStack {
+                BubblyCardMaterial(tint: accent, cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black.opacity(0.10))
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(accent.opacity(0.62), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.30), radius: 8, x: 0, y: 5)
+        .sheet(isPresented: $isEditing) {
+            AddKanbanQuickTaskSheet(
+                column: column,
+                editingTask: task
+            )
+        }
+    }
+
+    private var actionControls: some View {
+        VStack(alignment: .trailing, spacing: 5) {
+            completionCircle
+                .frame(width: 28, alignment: .center)
+
+            HStack(spacing: 7) {
+                Button { isEditing = true } label: {
+                    quickTaskActionIcon("pencil", tint: accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit quick task")
+
+                Button(role: .destructive, action: onDelete) {
+                    quickTaskActionIcon("trash", tint: .white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete quick task")
+            }
+        }
+    }
+
+    private func quickTaskActionIcon(_ asset: String, tint: Color) -> some View {
+        Image(asset)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 15, height: 15)
+            .foregroundStyle(tint)
+            .bubblyIconMaterial(tint: tint)
+            .shadow(color: .black.opacity(0.52), radius: 2, x: 0, y: 1)
+            .frame(width: 28, height: 28)
+            .contentShape(Rectangle())
+    }
+
+    private var quickTaskIcon: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.72))
+
+            BubblyIconMaterial(tint: accent)
+                .mask {
+                    Circle()
+                        .strokeBorder(lineWidth: 1.4)
+                }
+
+            Image(column.board?.icon ?? "starcal")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 17, height: 17)
+                .foregroundStyle(accent)
+                .bubblyIconMaterial(tint: accent)
+        }
+        .frame(width: 34, height: 34)
+        .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
+    }
+
+    private var completionCircle: some View {
+        Button { complete() } label: {
+            ZStack {
+                Circle()
+                    .fill(task.isCompleted ? accent.opacity(0.20) : Color.clear)
+                    .frame(width: 22, height: 22)
+                    .overlay {
+                        Circle()
+                            .strokeBorder(accent.opacity(0.88), lineWidth: 2)
+                    }
+
+                if task.isCompleted {
+                    Image("checkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 9, height: 9)
+                        .foregroundStyle(accent)
+                        .bubblyIconMaterial(tint: accent)
+                }
+            }
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(task.isCompleted)
+        .accessibilityLabel(task.isCompleted ? "Quick task completed" : "Complete quick task")
+    }
+
+    private func complete() {
+        guard !task.isCompleted else { return }
+        task.isCompleted = true
+        task.completedAt = Date()
+        task.updatedAt = Date()
+        try? modelContext.save()
+        onComplete?()
+    }
+}
+
 // MARK: - Timeline Habit Card
+
+private func kanbanTimelineItemIcon(_ iconID: String, accent: Color) -> some View {
+    ZStack {
+        Circle()
+            .fill(Color.black.opacity(0.72))
+
+        BubblyIconMaterial(tint: accent)
+            .mask {
+                Circle()
+                    .strokeBorder(lineWidth: 1.4)
+            }
+
+        LureliaIconView(iconId: iconID, size: 19)
+            .foregroundStyle(accent)
+            .bubblyIconMaterial(tint: accent)
+    }
+    .frame(width: 36, height: 36)
+    .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
+}
+
+private func kanbanTimelineActionIcon(_ assetName: String) -> some View {
+    Image(assetName)
+        .renderingMode(.template)
+        .resizable()
+        .scaledToFit()
+        .frame(width: 13, height: 13)
+        .foregroundStyle(.white)
+        .shadow(color: Color.black.opacity(0.48), radius: 2, x: 0, y: 1)
+        .frame(width: 30, height: 30)
+        .background(LColors.glassSurface, in: Circle())
+        .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
+        .contentShape(Circle())
+}
 
 struct KanbanTimelineHabitOccurrenceCard: View {
     @Environment(\.modelContext) private var modelContext
@@ -2482,14 +3134,7 @@ struct KanbanTimelineHabitOccurrenceCard: View {
     private func cardContent(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: 36, height: 36)
-
-                    LureliaIconView(iconId: habit.iconName ?? "flame", size: 19)
-                       .foregroundStyle(.white)
-                }
+                kanbanTimelineItemIcon(habit.iconName ?? "flame", accent: accent)
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(habit.title)
@@ -2537,6 +3182,11 @@ struct KanbanTimelineHabitOccurrenceCard: View {
                 role: .supporting,
                 cornerRadius: 16
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.12))
+                    .allowsHitTesting(false)
+            }
         }
         .opacity(isCompletedForOccurrence || isSkippedForDay ? 0.72 : 1)
     }
@@ -2544,7 +3194,7 @@ struct KanbanTimelineHabitOccurrenceCard: View {
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .foregroundStyle(kanbanReadableAccentText(accent))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
@@ -2586,15 +3236,44 @@ struct KanbanTimelineHabitOccurrenceCard: View {
             }
         }
 
+        let usesCardColorMaterial = text == "SOON" || text == "DUE NOW"
+        let badgeTint = usesCardColorMaterial ? accent : color
+        let textTint = usesCardColorMaterial ? badgeTint.wcagContrastingSolidTextColor : color
+
         return Text(text)
             .font(.system(size: 10, weight: .black, design: .rounded))
-            .foregroundStyle(color)
+            .foregroundStyle(textTint)
+            .bubblyIconMaterial(tint: textTint, isEnabled: usesCardColorMaterial)
+            .shadow(
+                color: usesCardColorMaterial ? Color.black.opacity(0.68) : .clear,
+                radius: 2,
+                x: 0,
+                y: 1
+            )
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(color.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(color.opacity(0.28), lineWidth: 1))
+            .background {
+                if usesCardColorMaterial {
+                    Capsule()
+                        .fill(badgeTint)
+                        .bubblyIconMaterial(tint: badgeTint)
+                } else {
+                    Capsule()
+                        .fill(color.opacity(0.12))
+                }
+            }
+            .overlay {
+                if usesCardColorMaterial {
+                    Capsule()
+                        .strokeBorder(badgeTint, lineWidth: 1)
+                        .bubblyIconMaterial(tint: badgeTint)
+                } else {
+                    Capsule()
+                        .strokeBorder(color.opacity(0.28), lineWidth: 1)
+                }
+            }
     }
 
     private var completionCircle: some View {
@@ -2616,7 +3295,7 @@ struct KanbanTimelineHabitOccurrenceCard: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                       .foregroundStyle(accent)
+                        .foregroundStyle(accent)
                 }
             }
             .contentShape(Circle())
@@ -2645,35 +3324,14 @@ struct KanbanTimelineHabitOccurrenceCard: View {
 
     private var editButton: some View {
         Button(action: onEdit) {
-            Image("pencil")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
-                .frame(width: 30, height: 30)
-                .background(LColors.glassSurface, in: Circle())
-                .overlay(
-                    Circle()
-                        .strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1)
-                )
-                .contentShape(Circle())
+            kanbanTimelineActionIcon("pencil")
         }
         .buttonStyle(.plain)
     }
 
     private var deleteButton: some View {
         Button(action: onDelete) {
-            Image("trash")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
-                .frame(width: 30, height: 30)
-                .background(LColors.glassSurface, in: Circle())
-                .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
-                .contentShape(Circle())
+            kanbanTimelineActionIcon("trash")
         }
         .buttonStyle(.plain)
     }
@@ -2843,13 +3501,18 @@ struct KanbanTimelineRoutineOccurrenceCard: View {
                 role: .supporting,
                 cornerRadius: 16
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.12))
+                    .allowsHitTesting(false)
+            }
         }
     }
 
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .foregroundStyle(kanbanReadableAccentText(accent))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
@@ -3002,6 +3665,11 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
                 role: .supporting,
                 cornerRadius: 16
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.12))
+                    .allowsHitTesting(false)
+            }
         }
         .opacity(isPendingForOccurrence ? 1 : 0.72)
     }
@@ -3041,20 +3709,13 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
     }
 
     private var routineTaskIcon: some View {
-        ZStack {
-            Circle()
-                .fill(Color.white.opacity(0.10))
-                .frame(width: 36, height: 36)
-
-            LureliaIconView(iconId: task.icon, size: 19)
-                .foregroundStyle(.white)
-        }
+        kanbanTimelineItemIcon(task.icon, accent: accent)
     }
 
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .foregroundStyle(kanbanReadableAccentText(accent))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
@@ -3096,7 +3757,7 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                       .foregroundStyle(accent)
+                        .foregroundStyle(accent)
                 }
             }
             .contentShape(Circle())
@@ -3127,35 +3788,14 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
 
     private var editButton: some View {
         Button(action: onEdit) {
-            Image("pencil")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
-                .frame(width: 30, height: 30)
-                .background(LColors.glassSurface, in: Circle())
-                .overlay(
-                    Circle()
-                        .strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1)
-                )
-                .contentShape(Circle())
+            kanbanTimelineActionIcon("pencil")
         }
         .buttonStyle(.plain)
     }
 
     private var deleteButton: some View {
         Button(action: onDelete) {
-            Image("trash")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
-                .frame(width: 30, height: 30)
-                .background(LColors.glassSurface, in: Circle())
-                .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
-                .contentShape(Circle())
+            kanbanTimelineActionIcon("trash")
         }
         .buttonStyle(.plain)
     }
@@ -3202,6 +3842,15 @@ struct KanbanTimelineRoutineTaskOccurrenceCard: View {
         } else {
             task.resetState()
         }
+
+        LureliaRoutineTaskOccurrenceNotifications.restorePendingOccurrence(
+            for: task,
+            on: fireDate
+        )
+        LureliaRoutineTaskOccurrenceAlarms.restorePendingOccurrence(
+            for: task,
+            on: fireDate
+        )
 
         try? modelContext.save()
         LureliaWidgetReloads.reloadAll()
@@ -3274,13 +3923,18 @@ struct KanbanTimelineRoutineDetailTaskCard: View {
                 role: .supporting,
                 cornerRadius: 14
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.black.opacity(0.12))
+                    .allowsHitTesting(false)
+            }
         }
     }
 
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 9, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .foregroundStyle(kanbanReadableAccentText(accent))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 5)
@@ -3367,9 +4021,8 @@ struct KanbanTimelineInboxColumnView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            LureliaUserChoiceSurface(
+            BubblyCardMaterial(
                 tint: boardAccent,
-                role: .supporting,
                 cornerRadius: 22
             )
         }
@@ -3508,14 +4161,7 @@ struct KanbanTimelineReminderCard: View {
     private func cardContent(overdue: Bool, dueNow: Bool, upcoming: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(width: 36, height: 36)
-
-                    LureliaIconView(iconId: reminderIcon, size: 19)
-                       .foregroundStyle(.white)
-                }
+                kanbanTimelineItemIcon(reminderIcon, accent: accent)
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(reminder.title)
@@ -3559,6 +4205,11 @@ struct KanbanTimelineReminderCard: View {
                 role: .supporting,
                 cornerRadius: 16
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.12))
+                    .allowsHitTesting(false)
+            }
         }
         .opacity(reminder.isEnabled ? 1 : 0.65)
     }
@@ -3582,7 +4233,7 @@ struct KanbanTimelineReminderCard: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                       .foregroundStyle(accent)
+                        .foregroundStyle(accent)
                 }
             }
             .contentShape(Circle())
@@ -3609,38 +4260,14 @@ struct KanbanTimelineReminderCard: View {
 
     private var editButton: some View {
         Button(action: onEdit) {
-            Image("pencil")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
-                .frame(width: 30, height: 30)
-                .background(LColors.glassSurface, in: Circle())
-                .overlay(
-                    Circle()
-                        .strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1)
-                )
-                .contentShape(Circle())
+            kanbanTimelineActionIcon("pencil")
         }
         .buttonStyle(.plain)
     }
 
     private var deleteButton: some View {
         Button(action: onDelete) {
-            Image("trash")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
-                .frame(width: 30, height: 30)
-                .background(LColors.glassSurface, in: Circle())
-                .overlay(
-                    Circle()
-                        .strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1)
-                )
-                .contentShape(Circle())
+            kanbanTimelineActionIcon("trash")
         }
         .buttonStyle(.plain)
     }
@@ -3662,7 +4289,7 @@ struct KanbanTimelineReminderCard: View {
             ForEach(Array(fireDates.prefix(2).enumerated()), id: \.offset) { _, date in
                 Text(date.formatted(date: .omitted, time: .shortened))
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(kanbanReadableAccentText(accent))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .padding(.horizontal, 6)
@@ -3674,7 +4301,7 @@ struct KanbanTimelineReminderCard: View {
             if fireDates.count > 2 {
                 Text("+\(fireDates.count - 2)")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(kanbanReadableAccentText(accent))
                     .lineLimit(1)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
@@ -3786,14 +4413,7 @@ struct KanbanTimelineInboxReminderCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 36, height: 36)
-
-                LureliaIconView(iconId: reminderIcon, size: 19)
-                    .foregroundStyle(.white)
-            }
+            kanbanTimelineItemIcon(reminderIcon, accent: accent)
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(reminder.title)
@@ -3805,7 +4425,7 @@ struct KanbanTimelineInboxReminderCard: View {
                     ForEach(Array(fireDates.prefix(2).enumerated()), id: \.offset) { _, date in
                         Text(date.formatted(date: .omitted, time: .shortened))
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                          .foregroundStyle(accent)
+                            .foregroundStyle(kanbanReadableAccentText(accent))
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                             .padding(.horizontal, 6)
@@ -3817,7 +4437,7 @@ struct KanbanTimelineInboxReminderCard: View {
                     if fireDates.count > 2 {
                         Text("+\(fireDates.count - 2)")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                          .foregroundStyle(accent)
+                            .foregroundStyle(kanbanReadableAccentText(accent))
                             .lineLimit(1)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
@@ -3836,6 +4456,11 @@ struct KanbanTimelineInboxReminderCard: View {
                 role: .supporting,
                 cornerRadius: 16
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.black.opacity(0.12))
+                    .allowsHitTesting(false)
+            }
         }
         .opacity(reminder.isEnabled ? 1 : 0.65)
     }

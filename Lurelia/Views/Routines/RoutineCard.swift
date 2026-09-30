@@ -146,51 +146,22 @@ struct RoutineCard: View {
         .padding(.vertical, 12)
         .frame(width: fixedWidth, height: Self.cardHeight, alignment: .center)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(LColors.glassSurface)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(routineTint.opacity(0.34))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [
-                                    LColors.glassBorderStrong,
-                                    routineTint.opacity(0.28),
-                                    LColors.gradientPurple.opacity(0.16)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                }
+            BubblyCardMaterial(
+                tint: routineTint,
+                cornerRadius: 22
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: routineTint.opacity(0.13), radius: 14, x: 0, y: 7)
     }
 
     private var routineIconBadge: some View {
-        ZStack {
-            Circle()
-                .fill(routineTint.opacity(0.18))
-                .frame(width: 36.5, height: 36.5)
-                .overlay(
-                    Circle()
-                        .strokeBorder(LColors.glassBorderStrong, lineWidth: 1)
-                )
-
-            Circle()
-                .fill(routineTint.opacity(0.22))
-                .frame(width: 30.5, height: 30.5)
-                .blur(radius: 7)
-
-            LureliaIconView(iconId: routine.icon, size: 30)
-                .foregroundStyle(LColors.textPrimary)
-        }
-        .frame(width: 36.5, height: 36.5)
+        LureliaIconView(iconId: routine.icon, size: 30)
+            .foregroundStyle(routineTint)
+            .bubblyIconMaterial(tint: routineTint)
+            .shadow(color: Color.black.opacity(0.50), radius: 3.5, x: 0, y: 2)
+            .frame(width: 36.5, height: 36.5)
     }
 
     private var bottomControlRow: some View {

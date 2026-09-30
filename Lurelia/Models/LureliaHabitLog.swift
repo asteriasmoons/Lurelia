@@ -90,6 +90,29 @@ extension LureliaHabitLog {
         updatedAt = Date()
     }
 
+    /// Restores per-occurrence keys for legacy logs that only stored `count`.
+    /// Existing keys and the historical count are preserved exactly.
+    @discardableResult
+    func backfillCompletedFireTimes(
+        from fireDates: [Date],
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard count > 0, !fireDates.isEmpty else { return false }
+
+        var current = completedFireTimes
+        let desiredKeyCount = min(count, fireDates.count)
+        guard current.count < desiredKeyCount else { return false }
+
+        for fireDate in fireDates.sorted() where current.count < desiredKeyCount {
+            current.insert(Self.fireTimeKey(for: fireDate, calendar: calendar))
+        }
+
+        guard current != completedFireTimes else { return false }
+        completedFireTimes = current
+        updatedAt = Date()
+        return true
+    }
+
     /// Removes `date`'s HH:mm key from `completedFireTimes` and decrements
     /// `count`. Used when the user unchecks a specific occurrence.
     func unmarkCompleted(atFireDate date: Date, calendar: Calendar = .current) {

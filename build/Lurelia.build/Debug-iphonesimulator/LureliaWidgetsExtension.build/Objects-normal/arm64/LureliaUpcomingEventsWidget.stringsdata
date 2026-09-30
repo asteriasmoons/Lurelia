@@ -1,0 +1,48 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/LureliaUpcomingEventsWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Nothing coming up",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 563
+        }
+      },
+      {
+        "comment": "",
+        "key": "Upcoming Events",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 554
+        }
+      },
+      {
+        "comment": "",
+        "key": "·",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 591
+        }
+      },
+      {
+        "comment": "",
+        "key": "Upcoming Events",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 729
+        }
+      },
+      {
+        "comment": "",
+        "key": "See your next events at a glance, tinted by their calendar. Long-press → Edit Widget to pick a specific calendar.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 730
+        }
+      }
+    ]
+  },
+  "version": 1
+}

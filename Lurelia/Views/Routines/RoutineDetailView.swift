@@ -12,6 +12,7 @@ struct RoutineDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
     
     let routineID: PersistentIdentifier
 
@@ -39,7 +40,9 @@ struct RoutineDetailView: View {
         _routines = Query(descriptor)
     }
     
-    @State private var showEdit = false
+    @State private var routineColorSelection: RoutineEditorLaunchRequest?
+    @State private var queuedRoutineEditor: RoutineEditorLaunchRequest?
+    @State private var routineEditor: RoutineEditorLaunchRequest?
     @State private var activeRoutine: LureliaRoutine?
     @State private var showCompletionBanner = false
     @State private var bannerMessage = "Done!"
@@ -74,6 +77,52 @@ struct RoutineDetailView: View {
 
     private enum RoutineTaskDayState {
         case pending, completed, skipped
+    }
+
+    private enum RoutineDetailAction: String, Identifiable {
+        case resume
+        case openRun
+        case pause
+        case end
+        case resetTasks
+        case complete
+        case skip
+        case run
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .resume: return "Resume"
+            case .openRun: return "Open Run"
+            case .pause: return "Pause"
+            case .end: return "End"
+            case .resetTasks: return "Reset Tasks"
+            case .complete: return "Complete"
+            case .skip: return "Skip"
+            case .run: return "Run"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .resume, .openRun, .run: return "playwavy"
+            case .pause: return "pausewavy"
+            case .end: return "stopwavy"
+            case .resetTasks: return "arrow.counterclockwise"
+            case .complete: return "checkwavy"
+            case .skip: return "skipwavy"
+            }
+        }
+
+        var isPrimary: Bool {
+            switch self {
+            case .resume, .openRun, .resetTasks, .complete:
+                return true
+            case .pause, .end, .skip, .run:
+                return false
+            }
+        }
     }
 
     private var scheduleStatus: RoutineScheduleStatus {
@@ -243,7 +292,8 @@ struct RoutineDetailView: View {
     
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 18) {
@@ -310,8 +360,19 @@ struct RoutineDetailView: View {
         .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showEdit) {
-            AddRoutineView(editingRoutine: routine)
+        .sheet(item: $routineColorSelection, onDismiss: presentQueuedRoutineEditor) { request in
+            RoutineColorSelectionSheet(initialColor: request.color) { color in
+                queuedRoutineEditor = RoutineEditorLaunchRequest(
+                    routine: request.routine,
+                    color: color
+                )
+            }
+        }
+        .sheet(item: $routineEditor) { request in
+            AddRoutineView(
+                editingRoutine: request.routine,
+                initialColor: request.color
+            )
         }
         .routineTaskEditor(
             isPad: isPad,
@@ -349,6 +410,20 @@ struct RoutineDetailView: View {
             processExternalRoutineChanges()
         }
         .completionBanner(isShowing: showCompletionBanner, message: bannerMessage)
+    }
+
+    private func beginRoutineEditor() {
+        queuedRoutineEditor = nil
+        routineColorSelection = RoutineEditorLaunchRequest(
+            routine: routine,
+            color: routineTint
+        )
+    }
+
+    private func presentQueuedRoutineEditor() {
+        guard let queuedRoutineEditor else { return }
+        self.queuedRoutineEditor = nil
+        routineEditor = queuedRoutineEditor
     }
     
     private func triggerBanner(_ message: String) {
@@ -419,44 +494,40 @@ extension RoutineDetailView {
 
             Spacer()
 
-            Button {
-                showEdit = true
-            } label: {
-                Image("settings")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 17, height: 17)
-                    .foregroundStyle(routineFillTextColor)
-                    .wcagContrastLift(on: routineTint)
-                    .frame(width: 40, height: 40)
-                    .background(routineTint, in: Circle())
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                    }
+            routineHeaderButton(icon: "settings") {
+                beginRoutineEditor()
             }
-            .buttonStyle(.plain)
-            
-            Button {
+
+            routineHeaderButton(icon: "xmarkwavy") {
                 dismiss()
-            } label: {
-                Image("xmarkwavy")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 17, height: 17)
-                    .foregroundStyle(routineFillTextColor)
-                    .wcagContrastLift(on: routineTint)
-                    .frame(width: 40, height: 40)
-                    .background(routineTint, in: Circle())
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
-                    }
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    private func routineHeaderButton(
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            ZStack {
+                BubblyIconMaterial(tint: routineTint)
+                    .clipShape(Circle())
+
+                routineButtonIcon(
+                    icon,
+                    size: 17,
+                    color: Color.black.opacity(0.88),
+                    shadowColor: Color.white.opacity(0.16)
+                )
+            }
+            .frame(width: 40, height: 40)
+            .overlay {
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.48), radius: 7, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
     }
     
     private var heroCard: some View {
@@ -464,20 +535,16 @@ extension RoutineDetailView {
             HStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(routineTint.opacity(0.18))
+                        .fill(Color.black.opacity(0.42))
                         .frame(width: 78, height: 78)
                         .overlay(
                             Circle()
-                                .strokeBorder(LColors.glassBorderStrong, lineWidth: 1)
+                                .strokeBorder(routineTint.opacity(0.85), lineWidth: 1)
                         )
-                    
-                    Circle()
-                        .fill(routineTint.opacity(0.24))
-                        .frame(width: 54, height: 54)
-                        .blur(radius: 16)
                     
                     LureliaIconView(iconId: routine.icon, size: 36.5)
                         .foregroundStyle(adaptiveRoutineTextColor)
+                        .bubblyIconMaterial(tint: routineTint)
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -489,7 +556,7 @@ extension RoutineDetailView {
                         heroMetaLabel(
                             icon: routine.timeOfDay.icon,
                             text: routine.timeOfDay.rawValue,
-                            color: routineTint
+                            color: .white
                         )
                         
                         Text("·")
@@ -528,16 +595,10 @@ extension RoutineDetailView {
         }
         .padding(18)
         .background {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(LColors.glassSurface)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(routineTint.opacity(0.30))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .strokeBorder(routineTint.opacity(0.55), lineWidth: 1.1)
-                }
+            BubblyCardMaterial(
+                tint: routineTint,
+                cornerRadius: 28
+            )
         }
         .shadow(color: routineTint.opacity(0.16), radius: 18, x: 0, y: 10)
     }
@@ -545,160 +606,152 @@ extension RoutineDetailView {
     private var scheduleStatusBox: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(scheduleStatus == .dueNow ? routineTint : .white.opacity(0.35))
+                .fill(scheduleStatus == .dueNow ? .white : .white.opacity(0.35))
                 .frame(width: 8, height: 8)
 
             Text(scheduleStatus == .dueNow ? "DUE NOW" : "SOON")
                 .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundStyle(scheduleStatus == .dueNow ? routineTint : .white.opacity(0.65))
+                .foregroundStyle(scheduleStatus == .dueNow ? .white : .white.opacity(0.65))
 
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    scheduleStatus == .dueNow
-                    ? routineTint.opacity(0.15)
-                    : Color.white.opacity(0.06)
-                )
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(
-                    scheduleStatus == .dueNow
-                    ? routineTint.opacity(0.55)
-                    : Color.white.opacity(0.14),
-                    lineWidth: 1
-                )
+        .background {
+            BubblyCardMaterial(
+                tint: routineTint,
+                cornerRadius: 16
+            )
         }
     }
 
     private var actionStrip: some View {
         HStack(spacing: 12) {
-            if let activeRun {
-                if activeRun.isPaused {
-                    primaryActionButton(
-                        title: "Resume",
-                        icon: "playwavy"
-                    ) {
-                        RoutineManager.shared.resumeRun(
-                            run: activeRun,
-                            routine: routine
-                        )
-                        activeRoutine = routine
-                        LureliaWidgetReloads.reloadAll()
-                    }
-                } else {
-                    primaryActionButton(
-                        title: "Open Run",
-                        icon: "playwavy"
-                    ) {
-                        activeRoutine = routine
-                    }
-                    
-                    secondaryActionButton(
-                        title: "Pause",
-                        icon: "pausewavy"
-                    ) {
-                        RoutineManager.shared.pauseRun(
-                            run: activeRun,
-                            routine: routine
-                        )
-                        try? modelContext.save()
-                        LureliaWidgetReloads.reloadAll()
-                    }
-                }
-                
-                secondaryActionButton(
-                    title: "End",
-                    icon: "stopwavy"
+            ForEach(actionStripActions) { action in
+                routineActionButton(
+                    title: action.title,
+                    icon: action.icon,
+                    isPrimary: action.isPrimary
                 ) {
-                    RoutineManager.shared.finishRun(
-                        run: activeRun,
-                        routine: routine,
-                        wasCompleted: false
-                    )
-                    try? modelContext.save()
-                    LureliaWidgetReloads.reloadAll()
-                }
-            } else if routineAllTasksResolvedToday {
-                primaryActionButton(
-                    title: "Reset Tasks",
-                    icon: "arrow.counterclockwise"
-                ) {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        routine.resetTaskStates()
-                        try? modelContext.save()
-                    }
-                    triggerBanner("Tasks reset!")
-                    LureliaWidgetReloads.reloadAll()
-                }
-                
-                secondaryActionButton(
-                    title: "Run",
-                    icon: "playwavy"
-                ) {
-                    let run = RoutineManager.shared.startRun(
-                        for: routine,
-                        context: modelContext
-                    )
-                    try? modelContext.save()
-                    if run.isActive { activeRoutine = routine }
-                    LureliaWidgetReloads.reloadAll()
-                }
-            } else {
-                primaryActionButton(
-                    title: routine.phasesEnabled ? "Complete" : "Complete",
-                    icon: "checkwavy"
-                ) {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        if routine.phasesEnabled {
-                            completeCurrentPhase()
-                        } else {
-                            RoutineManager.shared.completeRoutine(
-                                routine,
-                                context: modelContext
-                            )
-                        }
-                        try? modelContext.save()
-                        LureliaWidgetReloads.reloadAll()
-                    }
-                    triggerBanner(
-                        routine.phasesEnabled
-                        ? (routineAllTasksResolvedToday ? "Routine completed!" : "Phase completed!")
-                        : "Routine completed!"
-                    )
-                    LureliaWidgetReloads.reloadAll()
-                }
-                
-                secondaryActionButton(
-                    title: "Skip",
-                    icon: "skipwavy"
-                ) {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
-                        routine.skipRoutine()
-                        try? modelContext.save()
-                    }
-                    triggerBanner("Routine skipped")
-                    LureliaWidgetReloads.reloadAll()
-                }
-                
-                secondaryActionButton(
-                    title: "Run",
-                    icon: "playwavy"
-                ) {
-                    let run = RoutineManager.shared.startRun(
-                        for: routine,
-                        context: modelContext
-                    )
-                    try? modelContext.save()
-                    if run.isActive { activeRoutine = routine }
-                    LureliaWidgetReloads.reloadAll()
+                    performRoutineAction(action)
                 }
             }
+        }
+    }
+
+    private var actionStripActions: [RoutineDetailAction] {
+        if let activeRun {
+            return activeRun.isPaused
+                ? [.resume, .end]
+                : [.openRun, .pause, .end]
+        }
+
+        if routineAllTasksResolvedToday {
+            return [.resetTasks, .run]
+        }
+
+        return [.complete, .skip, .run]
+    }
+
+    private func performRoutineAction(_ action: RoutineDetailAction) {
+        switch action {
+        case .resume:
+            guard let activeRun else { return }
+            RoutineManager.shared.resumeRun(run: activeRun, routine: routine)
+            activeRoutine = routine
+            LureliaWidgetReloads.reloadAll()
+
+        case .openRun:
+            activeRoutine = routine
+
+        case .pause:
+            guard let activeRun else { return }
+            RoutineManager.shared.pauseRun(run: activeRun, routine: routine)
+            try? modelContext.save()
+            LureliaWidgetReloads.reloadAll()
+
+        case .end:
+            guard let activeRun else { return }
+            RoutineManager.shared.finishRun(
+                run: activeRun,
+                routine: routine,
+                wasCompleted: false
+            )
+            try? modelContext.save()
+            LureliaWidgetReloads.reloadAll()
+
+        case .resetTasks:
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                let now = Date()
+                routine.resetTaskStates()
+                for task in routine.sortedTasks {
+                    LureliaRoutineTaskOccurrenceNotifications.restorePendingOccurrence(
+                        for: task,
+                        on: now,
+                        now: now
+                    )
+                    LureliaRoutineTaskOccurrenceAlarms.restorePendingOccurrence(
+                        for: task,
+                        on: now,
+                        now: now
+                    )
+                }
+                try? modelContext.save()
+            }
+            triggerBanner("Tasks reset!")
+            LureliaWidgetReloads.reloadAll()
+
+        case .complete:
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                if routine.phasesEnabled {
+                    completeCurrentPhase()
+                } else {
+                    RoutineManager.shared.completeRoutine(
+                        routine,
+                        context: modelContext
+                    )
+                }
+                try? modelContext.save()
+                LureliaWidgetReloads.reloadAll()
+            }
+            triggerBanner(
+                routine.phasesEnabled
+                ? (routineAllTasksResolvedToday ? "Routine completed!" : "Phase completed!")
+                : "Routine completed!"
+            )
+            LureliaWidgetReloads.reloadAll()
+
+        case .skip:
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                let now = Date()
+                let pendingTasks = routine.sortedTasks.filter(\.isPending)
+                routine.skipRoutine()
+                for task in pendingTasks {
+                    LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+                        for: task,
+                        on: now,
+                        now: now
+                    )
+                    LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrence(
+                        for: task,
+                        on: now,
+                        now: now
+                    )
+                }
+                try? modelContext.save()
+            }
+            triggerBanner("Routine skipped")
+            LureliaWidgetReloads.reloadAll()
+
+        case .run:
+            let run = RoutineManager.shared.startRun(
+                for: routine,
+                context: modelContext
+            )
+            try? modelContext.save()
+            if run.isActive { activeRoutine = routine }
+            LureliaWidgetReloads.reloadAll()
         }
     }
     
@@ -735,17 +788,11 @@ extension RoutineDetailView {
             .frame(maxWidth: .infinity)
             .frame(height: 78)
             .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(routineTint.opacity(0.22))
-                    }
+                BubblyCardMaterial(
+                    tint: routineTint,
+                    cornerRadius: 20
+                )
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
-            )
             
             statCard(value: String(format: "%.1f", averageTasksCompleted), label: "Avg Done")
         }
@@ -761,14 +808,15 @@ extension RoutineDetailView {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(routineTint.opacity(0.18))
+                                    .fill(Color.black.opacity(0.42))
                                     .frame(width: 34, height: 34)
                                 Circle()
-                                    .strokeBorder(routineTint.opacity(0.65), lineWidth: 1)
+                                    .strokeBorder(routineTint.opacity(0.85), lineWidth: 1)
                                     .frame(width: 34, height: 34)
                                 Text(shortWeekdayLabel(for: weekday))
                                     .font(.system(size: 10, weight: .black, design: .rounded))
                                     .foregroundStyle(routineTint)
+                                    .bubblyIconMaterial(tint: routineTint)
                             }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(fullWeekdayLabel(for: weekday))
@@ -844,20 +892,25 @@ extension RoutineDetailView {
                     }
                 } label: {
                     HStack(spacing: 8) {
-                        Image(offDayPickerExpanded ? "xmarkwavy" : "addwavy")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 13, height: 13)
+                        routineButtonIcon(
+                            offDayPickerExpanded ? "xmarkwavy" : "addwavy",
+                            size: 13,
+                            color: .black,
+                            shadowColor: .clear
+                        )
 
                         Text(offDayPickerExpanded ? "Close Picker" : "Pick Off Day")
                             .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(Color.black)
                     }
-                    .foregroundStyle(routineFillTextColor)
-                    .wcagContrastLift(on: routineTint)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 11)
-                    .background(routineTint, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background {
+                        RoutineDetailButtonSurface(
+                            tint: routineTint,
+                            cornerRadius: 15
+                        )
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 15, style: .continuous)
                             .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
@@ -874,35 +927,39 @@ extension RoutineDetailView {
                 date: $pendingOffDayDate,
                 tint: routineTint,
                 minimumDate: offDayPickerRange.lowerBound,
-                maximumDate: offDayPickerRange.upperBound
+                maximumDate: offDayPickerRange.upperBound,
+                usesCardMaterial: true,
+                usesDarkTypography: true
             )
 
             Button {
                 addPendingOffDay()
             } label: {
                 HStack(spacing: 8) {
-                    Image("addwavy")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 13, height: 13)
+                    routineButtonIcon(
+                        "addwavy",
+                        size: 13,
+                        color: .black,
+                        shadowColor: .clear
+                    )
 
                     Text("Add Off Day")
                         .font(.system(size: 13, weight: .black, design: .rounded))
                 }
-                .foregroundStyle(routineTint)
+                .foregroundStyle(Color.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 11)
-                .background(routineTint.opacity(0.16), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 15, style: .continuous)
-                        .strokeBorder(routineTint.opacity(0.45), lineWidth: 1)
+                .background {
+                    BubblyIconMaterial(tint: routineTint)
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        )
                 }
             }
             .buttonStyle(.plain)
         }
         .padding(10)
-        .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(theme.palette.raisedSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(routineTint.opacity(0.35), lineWidth: 1)
@@ -922,6 +979,8 @@ extension RoutineDetailView {
                     .scaledToFit()
                     .frame(width: 14, height: 14)
                     .foregroundStyle(routineTint)
+                    .bubblyIconMaterial(tint: routineTint)
+                    .shadow(color: Color.black.opacity(0.65), radius: 4, x: 0, y: 3)
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -950,6 +1009,8 @@ extension RoutineDetailView {
                     .scaledToFit()
                     .frame(width: 12, height: 12)
                     .foregroundStyle(routineTint)
+                    .bubblyIconMaterial(tint: routineTint)
+                    .shadow(color: Color.black.opacity(0.65), radius: 4, x: 0, y: 3)
                     .frame(width: 30, height: 30)
                     .background(routineTint.opacity(0.13), in: Circle())
                     .overlay {
@@ -981,6 +1042,7 @@ extension RoutineDetailView {
                         .scaledToFit()
                         .frame(width: 23, height: 23)
                         .foregroundStyle(routineTint)
+                        .bubblyIconMaterial(tint: routineTint)
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -1019,6 +1081,7 @@ extension RoutineDetailView {
         HStack(spacing: 5) {
             LureliaIconView(iconId: icon, size: 11)
                 .foregroundStyle(routineTint)
+                .bubblyIconMaterial(tint: routineTint)
 
             Text(title)
                 .font(.system(size: 11, weight: .black, design: .rounded))
@@ -1041,20 +1104,21 @@ extension RoutineDetailView {
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 9) {
-                Image(icon)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 15, height: 15)
+                routineButtonIcon(icon, size: 15)
 
                 Text(title)
                     .font(.system(size: 14, weight: .black, design: .rounded))
+                    .foregroundStyle(Color.white)
+                    .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
             }
-            .foregroundStyle(routineFillTextColor)
-            .wcagContrastLift(on: routineTint)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(routineTint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background {
+                RoutineDetailButtonSurface(
+                    tint: routineTint,
+                    cornerRadius: 16
+                )
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
@@ -1093,13 +1157,14 @@ extension RoutineDetailView {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(Color.white.opacity(0.08))
+                            .fill(Color.black.opacity(0.42))
                             .frame(width: 34, height: 34)
                         Circle()
-                            .strokeBorder(routineTint.opacity(0.8), lineWidth: 1)
+                            .strokeBorder(routineTint.opacity(0.85), lineWidth: 1)
                             .frame(width: 34, height: 34)
                         LureliaIconView(iconId: task.icon, size: 15)
                             .foregroundStyle(isPendingToday ? routineTint : adaptiveRoutineSecondaryTextColor)
+                            .bubblyIconMaterial(tint: routineTint)
                     }
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -1123,6 +1188,7 @@ extension RoutineDetailView {
                             HStack(spacing: 5) {
                                 Image("skipwavy").renderingMode(.template).resizable().scaledToFit()
                                     .frame(width: 11, height: 11)
+                                    .bubblyIconMaterial(tint: routineTint)
                                 Text("Skipped").font(.system(size: 10, weight: .bold, design: .rounded))
                             }
                             .foregroundStyle(adaptiveRoutineSecondaryTextColor)
@@ -1146,17 +1212,23 @@ extension RoutineDetailView {
                     }
                 } label: {
                     ZStack {
-                        Circle().fill(isCompletedToday ? routineTint.opacity(0.18) : Color.clear)
+                        if isCompletedToday {
+                            BubblyIconMaterial(tint: routineTint)
+                                .clipShape(Circle())
+                        }
                         Circle().strokeBorder(
                             isSkippedToday ? adaptiveRoutineSecondaryTextColor : routineTint.opacity(0.75),
                             lineWidth: 1.5
                         )
+                        .bubblyIconMaterial(
+                            tint: isSkippedToday ? adaptiveRoutineSecondaryTextColor : routineTint
+                        )
                         if isCompletedToday {
-                            Image("checkwavy").renderingMode(.template).resizable().scaledToFit()
-                                .frame(width: 10, height: 10).foregroundStyle(routineTint)
+                            routineButtonIcon("checkwavy", size: 10)
                         }
                     }
                     .frame(width: 28, height: 28)
+                    .shadow(color: Color.black.opacity(0.42), radius: 5, x: 0, y: 3)
                 }
                 .buttonStyle(.plain)
                 
@@ -1167,11 +1239,9 @@ extension RoutineDetailView {
                         }
                     } label: {
                         Image("skipwavy").renderingMode(.template).resizable().scaledToFit()
-                            .frame(width: 12, height: 12)
-                            .foregroundStyle(adaptiveRoutineSecondaryTextColor)
                             .frame(width: 28, height: 28)
-                            .background(LColors.glassSurface2, in: Circle())
-                            .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
+                            .bubblyIconMaterial(tint: routineTint)
+                            .shadow(color: Color.black.opacity(0.65), radius: 5, x: 0, y: 3)
                     }
                     .buttonStyle(.plain)
                 } else if isSkippedToday {
@@ -1181,11 +1251,9 @@ extension RoutineDetailView {
                         }
                     } label: {
                         Image("repeatfill").renderingMode(.template).resizable().scaledToFit()
-                            .frame(width: 12, height: 12)
-                            .foregroundStyle(adaptiveRoutineSecondaryTextColor)
                             .frame(width: 28, height: 28)
-                            .background(LColors.glassSurface2, in: Circle())
-                            .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
+                            .bubblyIconMaterial(tint: routineTint)
+                            .shadow(color: Color.black.opacity(0.65), radius: 5, x: 0, y: 3)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1197,7 +1265,11 @@ extension RoutineDetailView {
             Button {
                 editingTask = task
             } label: {
-                Label { Text("Edit") } icon: { Image("settings").renderingMode(.template) }
+                Label { Text("Edit") } icon: {
+                    Image("settings")
+                        .renderingMode(.template)
+                        .bubblyIconMaterial(tint: routineTint)
+                }
             }
 
             if !availableMoveDestinations.isEmpty {
@@ -1213,6 +1285,7 @@ extension RoutineDetailView {
                             } icon: {
                                 Image(destination.icon)
                                     .renderingMode(.template)
+                                    .bubblyIconMaterial(tint: routineTint)
                             }
                         }
                     }
@@ -1229,6 +1302,7 @@ extension RoutineDetailView {
                 } icon: {
                     Image("trash")
                         .renderingMode(.template)
+                        .bubblyIconMaterial(tint: routineTint)
                 }
             }
             .tint(.white)
@@ -1321,6 +1395,8 @@ extension RoutineDetailView {
                                                 .scaledToFit()
                                                 .frame(width: 18, height: 18)
                                                 .foregroundStyle(routineTint)
+                                                .bubblyIconMaterial(tint: routineTint)
+                                                .shadow(color: Color.black.opacity(0.72), radius: 4, x: 0, y: 3)
                                         }
                                         .buttonStyle(.plain)
 
@@ -1333,6 +1409,8 @@ extension RoutineDetailView {
                                                 .scaledToFit()
                                                 .frame(width: 17, height: 17)
                                                 .foregroundStyle(routineTint)
+                                                .bubblyIconMaterial(tint: routineTint)
+                                                .shadow(color: Color.black.opacity(0.72), radius: 4, x: 0, y: 3)
                                         }
                                         .buttonStyle(.plain)
                                     }
@@ -1341,6 +1419,8 @@ extension RoutineDetailView {
                                     HStack(spacing: 5) {
                                         Image("clockfill").renderingMode(.template).resizable().scaledToFit()
                                             .frame(width: 11, height: 11).foregroundStyle(routineTint)
+                                            .bubblyIconMaterial(tint: routineTint)
+                                            .shadow(color: Color.black.opacity(0.72), radius: 3, x: 0, y: 2)
                                         Text(phase.formattedTimeRange)
                                             .font(.system(size: 11, weight: .black, design: .rounded))
                                             .foregroundStyle(adaptiveRoutineSecondaryTextColor)
@@ -1352,6 +1432,8 @@ extension RoutineDetailView {
                                     HStack(spacing: 5) {
                                         Image("hourglassfill").renderingMode(.template).resizable().scaledToFit()
                                             .frame(width: 11, height: 11).foregroundStyle(routineTint)
+                                            .bubblyIconMaterial(tint: routineTint)
+                                            .shadow(color: Color.black.opacity(0.72), radius: 3, x: 0, y: 2)
                                         Text(phaseDurationText(for: phase))
                                             .font(.system(size: 11, weight: .black, design: .rounded))
                                             .foregroundStyle(adaptiveRoutineSecondaryTextColor)
@@ -1362,7 +1444,7 @@ extension RoutineDetailView {
                                 }
                             }
                             .padding(.bottom, 8)
-                            Divider().overlay(LColors.glassBorder)
+                            Divider().overlay(theme.palette.textSecondary.opacity(0.18))
                                 .padding(.bottom, 4)
                         }
                         
@@ -1374,7 +1456,7 @@ extension RoutineDetailView {
                             ForEach(Array(phaseTasks.enumerated()), id: \.element.id) { idx, task in
                                 taskRow(task: task)
                                 if idx < phaseTasks.count - 1 {
-                                    Divider().overlay(LColors.glassBorder)
+                                    Divider().overlay(theme.palette.textSecondary.opacity(0.18))
                                 }
                             }
                         }
@@ -1403,6 +1485,7 @@ extension RoutineDetailView {
                                         Image("trash")
                                             .renderingMode(.template)
                                             .foregroundStyle(adaptiveRoutineTextColor)
+                                            .bubblyIconMaterial(tint: routineTint)
                                     }
                                 }
                             }
@@ -1428,11 +1511,12 @@ extension RoutineDetailView {
                         .resizable()
                         .scaledToFit()
                         .foregroundStyle(routineTint)
-                        .frame(width: 15, height: 15)
+                        .frame(width: 20, height: 20)
+                        .bubblyIconMaterial(tint: routineTint)
 
                     Text("Calendar")
                         .font(.system(size: 15, weight: .black, design: .rounded))
-                        .foregroundStyle(routineTint)
+                        .foregroundStyle(.white)
 
                     Spacer()
 
@@ -1442,6 +1526,7 @@ extension RoutineDetailView {
                         .scaledToFit()
                         .foregroundStyle(routineTint)
                         .frame(width: 15, height: 15)
+                        .bubblyIconMaterial(tint: routineTint)
                 }
                 .contentShape(Rectangle())
             }
@@ -1459,12 +1544,9 @@ extension RoutineDetailView {
                                 .scaledToFit()
                                 .frame(width: 15, height: 15)
                                 .foregroundStyle(routineTint)
+                                .bubblyIconMaterial(tint: routineTint)
+                                .shadow(color: Color.black.opacity(0.65), radius: 5, x: 0, y: 3)
                                 .frame(width: 36, height: 36)
-                                .background(routineTint.opacity(0.14), in: Circle())
-                                .overlay {
-                                    Circle()
-                                        .strokeBorder(routineTint.opacity(0.38), lineWidth: 1)
-                                }
                         }
                         .buttonStyle(.plain)
 
@@ -1485,12 +1567,9 @@ extension RoutineDetailView {
                                 .scaledToFit()
                                 .frame(width: 15, height: 15)
                                 .foregroundStyle(routineTint)
+                                .bubblyIconMaterial(tint: routineTint)
+                                .shadow(color: Color.black.opacity(0.65), radius: 5, x: 0, y: 3)
                                 .frame(width: 36, height: 36)
-                                .background(routineTint.opacity(0.14), in: Circle())
-                                .overlay {
-                                    Circle()
-                                        .strokeBorder(routineTint.opacity(0.38), lineWidth: 1)
-                                }
                         }
                         .buttonStyle(.plain)
                     }
@@ -1499,10 +1578,15 @@ extension RoutineDetailView {
                         columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7),
                         spacing: 8
                     ) {
-                        ForEach(Calendar.current.veryShortWeekdaySymbols, id: \.self) { symbol in
+                        ForEach(
+                            Array(Calendar.current.veryShortWeekdaySymbols.enumerated()),
+                            id: \.offset
+                        ) { _, symbol in
                             Text(symbol)
                                 .font(.system(size: 10, weight: .black, design: .rounded))
                                 .foregroundStyle(routineTint)
+                                .bubblyIconMaterial(tint: routineTint)
+                                .shadow(color: Color.black.opacity(0.65), radius: 4, x: 0, y: 3)
                                 .frame(maxWidth: .infinity)
                         }
 
@@ -1517,12 +1601,13 @@ extension RoutineDetailView {
                                     )
                                     .frame(width: 32, height: 32)
                                     .background {
-                                        Circle()
-                                            .fill(
-                                                Calendar.current.isDateInToday(date)
-                                                ? routineTint
-                                                : LColors.glassSurface2
-                                            )
+                                        if Calendar.current.isDateInToday(date) {
+                                            BubblyIconMaterial(tint: routineTint)
+                                                .clipShape(Circle())
+                                        } else {
+                                            Circle()
+                                                .fill(theme.palette.raisedSurface)
+                                        }
                                     }
                                     .overlay {
                                         Circle()
@@ -1544,16 +1629,10 @@ extension RoutineDetailView {
                 .padding(14)
                 .frame(maxWidth: .infinity)
                 .background {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LColors.glassSurface)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(routineTint.opacity(0.22))
-                        }
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
+                    BubblyCardMaterial(
+                        tint: routineTint,
+                        cornerRadius: 18
+                    )
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
@@ -1563,20 +1642,21 @@ extension RoutineDetailView {
                     }
                 } label: {
                     HStack(spacing: 9) {
-                        Image("ringstarcal")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 15, height: 15)
+                        routineButtonIcon("ringstarcal", size: 15)
 
                         Text("View Calendar")
                             .font(.system(size: 14, weight: .black, design: .rounded))
+                            .foregroundStyle(Color.white)
+                            .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
                     }
-                    .foregroundStyle(routineFillTextColor)
-                    .wcagContrastLift(on: routineTint)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(routineTint, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background {
+                        RoutineDetailButtonSurface(
+                            tint: routineTint,
+                            cornerRadius: 16
+                        )
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
@@ -1586,16 +1666,10 @@ extension RoutineDetailView {
                 .padding(14)
                 .frame(maxWidth: .infinity)
                 .background {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LColors.glassSurface)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(routineTint.opacity(0.22))
-                        }
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
+                    BubblyCardMaterial(
+                        tint: routineTint,
+                        cornerRadius: 18
+                    )
                 }
                 .transition(.opacity)
             }
@@ -1656,6 +1730,7 @@ extension RoutineDetailView {
                             Circle()
                                 .strokeBorder(routineTint.opacity(0.8), lineWidth: 1.5)
                                 .frame(width: 34, height: 34)
+                                .bubblyIconMaterial(tint: routineTint)
                             Text("\(index + 1)")
                                 .font(.system(size: 12, weight: .black, design: .rounded))
                                 .foregroundStyle(adaptiveRoutineTextColor)
@@ -1666,7 +1741,7 @@ extension RoutineDetailView {
                         Spacer()
                     }
                     if index < routine.principles.count - 1 {
-                        Divider().overlay(LColors.glassBorder)
+                        Divider().overlay(theme.palette.textSecondary.opacity(0.18))
                     }
                 }
             }
@@ -1679,20 +1754,7 @@ extension RoutineDetailView {
     
     private func routineMiniPill(icon: String, title: String, subtitle: String) -> some View {
         VStack(spacing: 5) {
-            Group {
-                if UIImage(named: icon) != nil {
-                    Image(icon)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    Image(systemName: icon)
-                        .resizable()
-                        .scaledToFit()
-                }
-            }
-            .foregroundStyle(routineTint)
-            .frame(width: 13, height: 13)
+            routineMaterialIcon(icon, size: 13)
 
             Text(title)
                 .font(.system(size: 12, weight: .black, design: .rounded))
@@ -1712,7 +1774,7 @@ extension RoutineDetailView {
         .padding(.vertical, 10)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
+                .fill(theme.palette.raisedSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(routineTint.opacity(0.22))
@@ -1828,42 +1890,12 @@ extension RoutineDetailView {
         color: Color
     ) -> some View {
         HStack(spacing: 5) {
-            Group {
-                if UIImage(named: icon) != nil {
-                    Image(icon)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    Image(systemName: icon)
-                        .resizable()
-                        .scaledToFit()
-                }
-            }
-            .frame(width: 12, height: 12)
+            routineMaterialIcon(icon, size: 12)
 
             Text(text)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
         }
         .foregroundStyle(color)
-    }
-    
-    private func primaryActionButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        routineActionButton(
-            title: title,
-            icon: icon,
-            isPrimary: true,
-            action: action
-        )
-    }
-
-    private func secondaryActionButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
-        routineActionButton(
-            title: title,
-            icon: icon,
-            isPrimary: false,
-            action: action
-        )
     }
     
     private func routineActionButton(
@@ -1874,36 +1906,23 @@ extension RoutineDetailView {
     ) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
-                Group {
-                    if UIImage(named: icon) != nil {
-                        Image(icon)
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                    } else {
-                        Image(systemName: icon)
-                            .resizable()
-                            .scaledToFit()
-                    }
-                }
-                .frame(width: 17, height: 17)
+                routineButtonIcon(icon, size: 17)
 
                 Text(title)
                     .font(.system(size: 11, weight: .black, design: .rounded))
+                    .foregroundStyle(Color.white)
+                    .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .foregroundStyle(isPrimary ? routineFillTextColor : adaptiveRoutineTextColor)
-            .wcagContrastLift(on: routineTint, isActive: isPrimary)
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(isPrimary ? routineTint : LColors.glassSurface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(isPrimary ? Color.clear : routineTint.opacity(0.18))
-                    }
+                RoutineDetailButtonSurface(
+                    tint: routineTint,
+                    cornerRadius: 20,
+                    dimmingOpacity: isPrimary ? 0 : 0.36
+                )
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1911,11 +1930,6 @@ extension RoutineDetailView {
                         isPrimary ? Color.white.opacity(0.14) : routineTint.opacity(0.45),
                         lineWidth: 1.05
                     )
-            )
-            .shadow(
-                color: isPrimary ? routineTint.opacity(0.22) : Color.clear,
-                radius: 14,
-                y: 8
             )
         }
         .buttonStyle(.plain)
@@ -1934,76 +1948,39 @@ extension RoutineDetailView {
         .frame(maxWidth: .infinity)
         .frame(height: 78)
         .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(LColors.glassSurface)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(routineTint.opacity(0.22))
-                }
+            BubblyCardMaterial(
+                tint: routineTint,
+                cornerRadius: 20
+            )
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
-        )
     }
     
     private func detailSectionCard<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 9) {
-                Group {
-                    if UIImage(named: icon) != nil {
-                        Image(icon)
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                    } else {
-                        Image(systemName: icon)
-                            .resizable()
-                            .scaledToFit()
-                    }
-                }
-                .foregroundStyle(routineTint)
-                .frame(width: 15, height: 15)
+                routineMaterialIcon(icon, size: 20)
                 Text(title)
                     .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(routineTint)
+                    .foregroundStyle(.white)
                 Spacer()
             }
             content()
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LColors.glassSurface)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(routineTint.opacity(0.22))
-                        }
+                    BubblyCardMaterial(
+                        tint: routineTint,
+                        cornerRadius: 18
+                    )
                 }
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(routineTint.opacity(0.50), lineWidth: 1.05)
-                )
         }
     }
     
     private func detailRow(icon: String, label: String, value: String) -> some View {
         HStack(spacing: 10) {
-            Group {
-                if UIImage(named: icon) != nil {
-                    Image(icon)
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                } else {
-                    Image(systemName: icon)
-                        .resizable()
-                        .scaledToFit()
-                }
-            }
-            .foregroundStyle(routineTint)
-            .frame(width: 14, height: 14)
-            .frame(width: 18)
+            routineMaterialIcon(icon, size: 14)
+                .frame(width: 18)
+                .shadow(color: Color.black.opacity(0.65), radius: 4, x: 0, y: 3)
             Text(label)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(adaptiveRoutineSecondaryTextColor)
@@ -2019,7 +1996,7 @@ extension RoutineDetailView {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(run.wasCompleted ? routineTint.opacity(0.24) : LColors.glassSurface2)
+                    .fill(run.wasCompleted ? routineTint.opacity(0.24) : theme.palette.raisedSurface)
                     .frame(width: 34, height: 34)
                 Image(run.wasCompleted ? "checkwavy" : "xmarkwavy")
                     .renderingMode(.template)
@@ -2027,6 +2004,7 @@ extension RoutineDetailView {
                     .scaledToFit()
                     .frame(width: 12, height: 12)
                     .foregroundStyle(run.wasCompleted ? routineTint : adaptiveRoutineSecondaryTextColor)
+                    .bubblyIconMaterial(tint: routineTint)
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(run.startedAt, style: .date)
@@ -2048,6 +2026,28 @@ extension RoutineDetailView {
             }
         }
         .padding(.vertical, 10)
+    }
+
+    private func routineMaterialIcon(_ icon: String, size: CGFloat) -> some View {
+        RoutineDetailMaterialIcon(
+            icon: icon,
+            size: size,
+            tint: routineTint
+        )
+    }
+
+    private func routineButtonIcon(
+        _ icon: String,
+        size: CGFloat,
+        color: Color = .white,
+        shadowColor: Color = Color.black.opacity(0.58)
+    ) -> some View {
+        RoutineDetailButtonIcon(
+            icon: icon,
+            size: size,
+            color: color,
+            shadowColor: shadowColor
+        )
     }
     
     private func deleteRunHistory(_ run: LureliaRoutineRun) {
@@ -2121,7 +2121,81 @@ extension RoutineDetailView {
     
     private var divider: some View {
         Divider()
-            .overlay(LColors.glassBorder)
+            .overlay(theme.palette.textSecondary.opacity(0.18))
+    }
+}
+
+private struct RoutineDetailMaterialIcon: View {
+    let icon: String
+    let size: CGFloat
+    let tint: Color
+
+    @ViewBuilder
+    var body: some View {
+        if UIImage(named: icon) != nil {
+            Image(icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .bubblyIconMaterial(tint: tint)
+        } else {
+            Image(systemName: icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .bubblyIconMaterial(tint: tint)
+        }
+    }
+}
+
+private struct RoutineDetailButtonIcon: View {
+    let icon: String
+    let size: CGFloat
+    let color: Color
+    let shadowColor: Color
+
+    @ViewBuilder
+    var body: some View {
+        if UIImage(named: icon) != nil {
+            Image(icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .foregroundStyle(color)
+                .shadow(color: shadowColor, radius: 2, x: 0, y: 1)
+        } else {
+            Image(systemName: icon)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+                .foregroundStyle(color)
+                .shadow(color: shadowColor, radius: 2, x: 0, y: 1)
+        }
+    }
+}
+
+private struct RoutineDetailButtonSurface: View {
+    let tint: Color
+    let cornerRadius: CGFloat
+    var dimmingOpacity: Double = 0
+
+    var body: some View {
+        ZStack {
+            BubblyCardMaterial(
+                tint: tint,
+                cornerRadius: cornerRadius
+            )
+
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color.black.opacity(dimmingOpacity))
+        }
+        .clipShape(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        )
+        .shadow(color: Color.black.opacity(0.46), radius: 8, x: 0, y: 4)
+        .allowsHitTesting(false)
     }
 }
 
@@ -2284,7 +2358,7 @@ private struct EditRoutinePhaseSheet: View {
     }
 
     private var addTaskSheet: some View {
-        AddCustomRoutineTaskView { draft in
+        AddCustomRoutineTaskView(tint: routineTint) { draft in
             addTask(from: draft)
         }
     }
@@ -2306,9 +2380,13 @@ private struct EditRoutinePhaseSheet: View {
                     .scaledToFit()
                     .frame(width: 17, height: 17)
                     .foregroundStyle(adaptiveTextColor)
+                    .bubblyIconMaterial(tint: adaptiveTextColor)
                     .wcagContrastLift(on: routineTint)
                     .frame(width: 40, height: 40)
                     .background(routineTint, in: Circle())
+                    .overlay {
+                        Circle().strokeBorder(routineTint, lineWidth: 2)
+                    }
             }
             .buttonStyle(.plain)
         }
@@ -2325,11 +2403,12 @@ private struct EditRoutinePhaseSheet: View {
                         .frame(width: 48, height: 48)
 
                     Circle()
-                        .strokeBorder(routineTint.opacity(0.85), lineWidth: 1)
+                        .strokeBorder(routineTint, lineWidth: 2)
                         .frame(width: 48, height: 48)
 
                     LureliaIconView(iconId: selectedIcon, size: 23)
                         .foregroundStyle(routineTint)
+                        .bubblyIconMaterial(tint: routineTint)
                 }
                 .frame(width: 48, height: 48)
 
@@ -2351,12 +2430,13 @@ private struct EditRoutinePhaseSheet: View {
                     .scaledToFit()
                     .frame(width: 12, height: 12)
                     .foregroundStyle(routineTint)
+                    .bubblyIconMaterial(tint: routineTint)
             }
             .padding(14)
             .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(routineTint.opacity(0.45), lineWidth: 1)
+                    .strokeBorder(routineTint, lineWidth: 2)
             }
         }
         .buttonStyle(.plain)
@@ -2365,10 +2445,21 @@ private struct EditRoutinePhaseSheet: View {
     private var scheduleCard: some View {
         fieldCard(title: "Schedule") {
             VStack(alignment: .leading, spacing: 12) {
-                Toggle("Scheduled Phase", isOn: $scheduleEnabled)
-                    .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(sheetTextColor)
-                    .tint(routineTint)
+                HStack(spacing: 12) {
+                    Text("Scheduled Phase")
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .foregroundStyle(sheetTextColor)
+
+                    Spacer(minLength: 8)
+
+                    LureliaSlidingIconToggle(
+                        isOn: $scheduleEnabled,
+                        iconName: "clockwavy",
+                        accentColor: routineTint,
+                        accessibilityLabel: "Scheduled Phase",
+                        usesIconMaterial: true
+                    )
+                }
 
                 if scheduleEnabled {
                     HStack(spacing: 7) {
@@ -2384,56 +2475,78 @@ private struct EditRoutinePhaseSheet: View {
                                     .font(.system(size: 10, weight: .black, design: .rounded))
                                     .foregroundStyle(
                                         selectedDays.contains(weekday)
-                                        ? sheetTextColor
+                                        ? Color.black
                                         : sheetSecondaryTextColor
                                     )
-                                    .wcagContrastLift(
-                                        on: routineTint,
-                                        isActive: selectedDays.contains(weekday)
-                                    )
                                     .frame(width: 32, height: 32)
-                                    .background(
-                                        selectedDays.contains(weekday)
-                                        ? routineTint.opacity(0.28)
-                                        : Color.white.opacity(0.06),
-                                        in: Circle()
-                                    )
+                                    .background {
+                                        if selectedDays.contains(weekday) {
+                                            BubblyIconMaterial(tint: routineTint)
+                                                .clipShape(Circle())
+                                        } else {
+                                            Circle()
+                                                .fill(Color.white.opacity(0.06))
+                                        }
+                                    }
                                     .overlay {
                                         Circle()
                                             .strokeBorder(
                                                 selectedDays.contains(weekday)
-                                                ? routineTint.opacity(0.85)
-                                                : Color.white.opacity(0.14),
-                                                lineWidth: 1
+                                                ? routineTint
+                                                : Color.white.opacity(0.22),
+                                                lineWidth: selectedDays.contains(weekday) ? 2 : 1.5
                                             )
                                     }
                             }
                             .buttonStyle(.plain)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
         }
     }
 
     private var timeCard: some View {
-        fieldCard(title: "Time") {
-            VStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Start time")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(sheetSecondaryTextColor)
-                    LureliaTintedTimeDrumPicker(hour: $startHour, minute: $startMinute, tint: routineTint)
-                }
-                Divider().overlay(LColors.glassBorder)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("End time")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(sheetSecondaryTextColor)
-                    LureliaTintedTimeDrumPicker(hour: $endHour, minute: $endMinute, tint: routineTint)
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("TIME")
+                .font(.system(size: 10, weight: .black, design: .rounded))
+                .foregroundStyle(sheetSecondaryTextColor)
+
+            HStack(alignment: .top, spacing: 10) {
+                compactTimePicker(
+                    title: "Start time",
+                    hour: $startHour,
+                    minute: $startMinute
+                )
+
+                compactTimePicker(
+                    title: "End time",
+                    hour: $endHour,
+                    minute: $endMinute
+                )
             }
         }
+    }
+
+    private func compactTimePicker(
+        title: String,
+        hour: Binding<Int>,
+        minute: Binding<Int>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(sheetSecondaryTextColor)
+
+            LureliaCompactTimeDrumPicker(
+                hour: hour,
+                minute: minute,
+                tint: routineTint,
+                usesDarkTypography: true
+            )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var tasksCard: some View {
@@ -2448,20 +2561,25 @@ private struct EditRoutinePhaseSheet: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 18, height: 18)
-                            .foregroundStyle(routineTint)
+                            .foregroundStyle(.white)
+                            .bubblyIconMaterial(tint: .white)
+                            .shadow(color: .black.opacity(0.72), radius: 2, x: 0, y: 1)
 
                         Text("Add Task")
                             .font(.system(size: 14, weight: .black, design: .rounded))
-                            .foregroundStyle(sheetTextColor)
+                            .foregroundStyle(.black)
 
                         Spacer()
                     }
                     .padding(.vertical, 10)
                     .padding(.horizontal, 12)
-                    .background(routineTint.opacity(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background {
+                        BubblyIconMaterial(tint: routineTint)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(routineTint.opacity(0.45), lineWidth: 1)
+                            .strokeBorder(routineTint, lineWidth: 2)
                     }
                 }
                 .buttonStyle(.plain)
@@ -2478,7 +2596,9 @@ private struct EditRoutinePhaseSheet: View {
                             phaseTaskRow(task)
 
                             if index < phaseTasks.count - 1 {
-                                Divider().overlay(LColors.glassBorder)
+                                Divider()
+                                    .overlay(routineTint.opacity(0.55))
+                                    .padding(.horizontal, 8)
                             }
                         }
                     }
@@ -2488,20 +2608,63 @@ private struct EditRoutinePhaseSheet: View {
     }
 
     private func phaseTaskRow(_ task: LureliaRoutineTask) -> some View {
-        HStack(spacing: 10) {
-            LureliaIconView(iconId: task.icon, size: 16)
-                .foregroundStyle(routineTint)
-                .frame(width: 30, height: 30)
-                .background(Color.white.opacity(0.08), in: Circle())
-                .overlay {
-                    Circle().strokeBorder(routineTint.opacity(0.45), lineWidth: 1)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                LureliaIconView(iconId: task.icon, size: 16)
+                    .foregroundStyle(routineTint)
+                    .bubblyIconMaterial(tint: routineTint)
+                    .frame(width: 30, height: 30)
+                    .background(Color.white.opacity(0.08), in: Circle())
+                    .overlay {
+                        Circle().strokeBorder(routineTint, lineWidth: 2)
+                    }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    editingTask = task
+                } label: {
+                    Image("pencil")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(routineTint)
+                        .bubblyIconMaterial(tint: routineTint)
+                        .frame(width: 32, height: 32)
+                        .background(LColors.glassSurface2, in: Circle())
+                        .overlay {
+                            Circle().strokeBorder(routineTint, lineWidth: 2)
+                        }
                 }
+                .buttonStyle(.plain)
+
+                Button {
+                    taskPendingDeletion = task
+                } label: {
+                    Image("trash")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(routineTint)
+                        .bubblyIconMaterial(tint: routineTint)
+                        .frame(width: 32, height: 32)
+                        .background(LColors.glassSurface2, in: Circle())
+                        .overlay {
+                            Circle().strokeBorder(routineTint, lineWidth: 2)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(task.title)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(sheetTextColor)
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 let notes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !notes.isEmpty {
@@ -2509,46 +2672,13 @@ private struct EditRoutinePhaseSheet: View {
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(sheetSecondaryTextColor)
                         .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-
-            Spacer(minLength: 0)
-
-            Button {
-                editingTask = task
-            } label: {
-                Image("settings")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(routineTint)
-                    .frame(width: 32, height: 32)
-                    .background(LColors.glassSurface2, in: Circle())
-                    .overlay {
-                        Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1)
-                    }
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                taskPendingDeletion = task
-            } label: {
-                Image("trash")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(routineTint)
-                    .frame(width: 32, height: 32)
-                    .background(LColors.glassSurface2, in: Circle())
-                    .overlay {
-                        Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1)
-                    }
-            }
-            .buttonStyle(.plain)
         }
-        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
     }
 
     private func fieldCard<Content: View>(
@@ -2566,7 +2696,7 @@ private struct EditRoutinePhaseSheet: View {
                 .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(routineTint.opacity(0.35), lineWidth: 1)
+                        .strokeBorder(routineTint, lineWidth: 2)
                 }
         }
     }
@@ -2577,17 +2707,16 @@ private struct EditRoutinePhaseSheet: View {
         } label: {
             Text("Save Phase")
                 .font(.system(size: 15, weight: .black, design: .rounded))
-                .foregroundStyle(canSave ? adaptiveTextColor : .white.opacity(0.45))
-                .wcagContrastLift(on: routineTint, isActive: canSave)
+                .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(
-                    canSave ? routineTint : Color.white.opacity(0.12),
-                    in: Capsule()
-                )
+                .background {
+                    BubblyCardMaterial(tint: routineTint, cornerRadius: 24)
+                }
         }
         .buttonStyle(.plain)
         .disabled(!canSave)
+        .opacity(canSave ? 1 : 0.45)
     }
 
     private func save() {
@@ -2980,8 +3109,10 @@ private struct RoutineTaskDottedProgressRing<CenterContent: View>: View {
     var body: some View {
         ZStack {
             ForEach(0..<dotCount, id: \.self) { index in
-                Circle()
-                    .fill(index < filledDotCount ? AnyShapeStyle(progressColor) : AnyShapeStyle(trackColor))
+                BubblyIconMaterial(
+                    tint: index < filledDotCount ? progressColor : trackColor
+                )
+                    .clipShape(Circle())
                     .frame(width: dotDiameter, height: dotDiameter)
                     .offset(y: -(size / 2))
                     .rotationEffect(.degrees(Double(index) / Double(dotCount) * 360))

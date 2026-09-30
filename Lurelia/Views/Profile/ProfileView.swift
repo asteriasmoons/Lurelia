@@ -11,6 +11,8 @@ import PhotosUI
 struct ProfileView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appTheme) private var theme
+    @EnvironmentObject private var reportRouter: LureliaReportRouter
     
     @Query private var settings: [UserSettings]
     @Query(sort: \KanbanBoard.sortOrder) private var boards: [KanbanBoard]
@@ -22,6 +24,7 @@ struct ProfileView: View {
     @State private var showOnboardingResetConfirmation = false
     @State private var showTimelineBoardDropdown = false
     @State private var showingReleaseNotes = false
+    @State private var showingReportCenter = false
     @State private var isUploadingProfileImage = false
     @State private var profileImageUploadError: String?
     @State private var hasAttemptedProfileImageUpload = false
@@ -32,7 +35,8 @@ struct ProfileView: View {
     
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
             
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 22) {
@@ -57,6 +61,9 @@ struct ProfileView: View {
                         .padding(.horizontal, 24)
 
                     releaseNotesCard
+                        .padding(.horizontal, 24)
+
+                    reportCenterCard
                         .padding(.horizontal, 24)
 
                     timelineSettingsCard
@@ -109,6 +116,11 @@ struct ProfileView: View {
             ReleaseNotesPage()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
+        }
+        .adaptivePresentation(isPresented: $showingReportCenter, useFullScreenCover: horizontalSizeClass == .regular) {
+            LureliaReportCenterView()
+                .environmentObject(reportRouter)
+                .modelContainer(for: [SubmittedReport.self, SubmittedReportAttachment.self])
         }
     }
 
@@ -454,7 +466,7 @@ struct ProfileView: View {
     }
 
     private var profileCard: some View {
-        GlassCard {
+        themedProfileCard(accentIndex: 0) {
             VStack(spacing: 14) {
             ZStack {
                 Circle()
@@ -500,11 +512,11 @@ struct ProfileView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 38, height: 38)
-                            .foregroundStyle(Color.white.adaptivePrimaryText)
+                            .bubblyIconMaterial(tint: profileAccent(at: 0))
                             .padding(18)
                             .background(
                                 Circle()
-                                    .fill(LGradients.header)
+                                    .fill(theme.palette.raisedSurface)
                             )
                     }
                 }
@@ -522,9 +534,9 @@ struct ProfileView: View {
                         } label: {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Color.white.adaptivePrimaryText)
+                                .bubblyIconMaterial(tint: profileAccent(at: 0))
                                 .frame(width: 28, height: 28)
-                                .background(LGradients.header, in: Circle())
+                                .background(theme.palette.raisedSurface, in: Circle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -539,10 +551,11 @@ struct ProfileView: View {
     private var timelineSettingsCard: some View {
         profileSectionCard(
             title: "Timeline Settings",
-            icon: "calendar"
+            icon: "calendar",
+            accentIndex: 3
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Default timeline board")
+                Text("Default timeline boards")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.58))
                     .textCase(.uppercase)
@@ -558,15 +571,15 @@ struct ProfileView: View {
                     HStack(spacing: 12) {
                         ZStack {
                             Circle()
-                                .fill(defaultTimelineBoardAccent.opacity(0.16))
+                                .fill(theme.palette.raisedSurface)
                                 .frame(width: 38, height: 38)
 
-                            iconView(defaultTimelineBoard?.icon ?? "starcal", size: 18)
-                                .foregroundStyle(defaultTimelineBoardAccent)
+                            iconView("starcal", size: 18)
+                                .bubblyIconMaterial(tint: profileAccent(at: 3))
                         }
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(defaultTimelineBoard?.name ?? (boards.isEmpty ? "No boards yet" : "Choose a board"))
+                            Text(boards.isEmpty ? "No boards yet" : "\(defaultTimelineBoardIDs.count) Default Boards Selected")
                                 .font(.system(size: 15, weight: .black, design: .rounded))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
@@ -584,7 +597,7 @@ struct ProfileView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 16, height: 16)
-                            .foregroundStyle(LGradients.header)
+                            .bubblyIconMaterial(tint: profileAccent(at: 3))
                             .rotationEffect(.degrees(showTimelineBoardDropdown ? 180 : 0))
                     }
                     .padding(.horizontal, 12)
@@ -619,16 +632,16 @@ struct ProfileView: View {
         Button {
             showingReleaseNotes = true
         } label: {
-            GlassCard {
+            themedProfileCard(accentIndex: 1) {
                 HStack(alignment: .center, spacing: 14) {
                     Image("timebook")
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
-                        .foregroundStyle(LColors.textPrimary)
+                        .bubblyIconMaterial(tint: profileAccent(at: 1))
                         .frame(width: 42, height: 42)
-                        .background { LureliaNeutralGlassCircle(prominence: .active) }
+                        .background(theme.palette.raisedSurface, in: Circle())
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Release Notes")
@@ -648,37 +661,74 @@ struct ProfileView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 15, height: 15)
-                        .foregroundStyle(LColors.textPrimary)
+                        .bubblyIconMaterial(tint: profileAccent(at: 1))
                 }
             }
         }
         .buttonStyle(.plain)
     }
 
-    private var defaultTimelineBoard: KanbanBoard? {
-        guard let boardID = userSettings?.defaultTimelineBoardID else {
-            return boards.first
-        }
+    private var reportCenterCard: some View {
+        Button {
+            showingReportCenter = true
+        } label: {
+            themedProfileCard(accentIndex: 2) {
+                HStack(alignment: .center, spacing: 14) {
+                    Image("megaphone")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                        .bubblyIconMaterial(tint: profileAccent(at: 2))
+                        .frame(width: 42, height: 42)
+                        .background(theme.palette.raisedSurface, in: Circle())
 
-        return boards.first { $0.id == boardID } ?? boards.first
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Report a Problem")
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundStyle(LColors.textPrimary)
+
+                        Text("Send a bug report, feature request, or beta feedback to Voxiverse.")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(LColors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image("chevright")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                        .bubblyIconMaterial(tint: profileAccent(at: 2))
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
-    private var defaultTimelineBoardAccent: Color {
-        Color(lureliaHex: defaultTimelineBoard?.colorHex ?? "#03dbfc")
+    private var defaultTimelineBoardIDs: Set<UUID> {
+        let availableIDs = Set(boards.map(\.id))
+        return Set(userSettings?.defaultTimelineBoardIDs ?? []).intersection(availableIDs)
     }
 
     private func timelineBoardOption(_ board: KanbanBoard) -> some View {
         Button {
-            setDefaultTimelineBoard(board)
+            toggleDefaultTimelineBoard(board)
         } label: {
             HStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(Color(lureliaHex: board.colorHex).opacity(0.14))
+                        .strokeBorder(
+                            Color(lureliaHex: board.colorHex).opacity(0.48),
+                            lineWidth: 1
+                        )
                         .frame(width: 32, height: 32)
 
                     iconView(board.icon, size: 15)
                         .foregroundStyle(Color(lureliaHex: board.colorHex))
+                        .bubblyIconMaterial(tint: Color(lureliaHex: board.colorHex))
                 }
 
                 Text(board.name)
@@ -694,7 +744,8 @@ struct ProfileView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 15, height: 15)
-                        .foregroundStyle(LGradients.header)
+                        .foregroundStyle(Color.white)
+                        .bubblyIconMaterial(tint: Color.white)
                 }
             }
             .padding(.horizontal, 12)
@@ -717,18 +768,24 @@ struct ProfileView: View {
     }
 
     private func isDefaultTimelineBoard(_ board: KanbanBoard) -> Bool {
-        defaultTimelineBoard?.id == board.id
+        defaultTimelineBoardIDs.contains(board.id)
     }
 
-    private func setDefaultTimelineBoard(_ board: KanbanBoard) {
+    private func toggleDefaultTimelineBoard(_ board: KanbanBoard) {
         let settings = resolvedUserSettings()
-        settings.defaultTimelineBoardID = board.id
+        var selectedIDs = Set(settings.defaultTimelineBoardIDs)
+
+        if selectedIDs.contains(board.id) {
+            selectedIDs.remove(board.id)
+        } else {
+            selectedIDs.insert(board.id)
+        }
+
+        settings.defaultTimelineBoardIDs = boards
+            .map(\.id)
+            .filter { selectedIDs.contains($0) }
 
         try? modelContext.save()
-
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.86)) {
-            showTimelineBoardDropdown = false
-        }
     }
 
     private func resolvedUserSettings() -> UserSettings {
@@ -744,7 +801,8 @@ struct ProfileView: View {
     private var devControlsCard: some View {
         profileSectionCard(
             title: "Dev Controls",
-            icon: "wrench.and.screwdriver.fill"
+            icon: "wrench.and.screwdriver.fill",
+            accentIndex: 4
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Temporary testing controls for pre-release setup.")
@@ -767,14 +825,13 @@ struct ProfileView: View {
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.red.opacity(0.24))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(Color.red.opacity(0.42), lineWidth: 1)
-                    )
+                    .background {
+                        BubblyTileSurface(
+                            tint: theme.palette.secondaryAccent,
+                            cornerRadius: 16
+                        )
+                    }
+                    .bubblyTileLift()
                 }
                 .buttonStyle(.plain)
             }
@@ -784,32 +841,20 @@ struct ProfileView: View {
     private func profileSectionCard<Content: View>(
         title: String,
         icon: String,
+        accentIndex: Int,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        GlassCard {
+        let accent = profileAccent(at: accentIndex)
+
+        return themedProfileCard(accentIndex: accentIndex) {
             VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 iconView(icon, size: 18)
-                    .foregroundStyle(LGradients.header)
+                    .bubblyIconMaterial(tint: accent)
                     .frame(width: 36, height: 36)
                     .background(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.85).opacity(0.72),
-                                                Color.white.opacity(0.85).opacity(0.72),
-                                                Color.white.opacity(0.34)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1.05
-                                    )
-                            )
+                            .fill(theme.palette.raisedSurface)
                     )
                 
                 Text(title)
@@ -822,6 +867,30 @@ struct ProfileView: View {
             content()
             }
         }
+    }
+
+    private func themedProfileCard<Content: View>(
+        accentIndex: Int,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+
+        return content()
+            .padding(LSpacing.cardPadding)
+            .background(
+                shape
+                    .fill(theme.palette.surface)
+                    .overlay {
+                        shape.strokeBorder(profileAccent(at: accentIndex), lineWidth: 1)
+                    }
+            )
+    }
+
+    private func profileAccent(at index: Int) -> Color {
+        let rotation = theme.palette.rotation
+        guard !rotation.isEmpty else { return theme.palette.primaryAction }
+        let normalizedIndex = ((index % rotation.count) + rotation.count) % rotation.count
+        return rotation[normalizedIndex]
     }
     
     private func iconView(_ icon: String, size: CGFloat) -> some View {

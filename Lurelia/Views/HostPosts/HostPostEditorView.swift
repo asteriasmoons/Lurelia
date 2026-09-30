@@ -36,6 +36,7 @@ struct HostPostEditorView: View {
     let kind: HostPostEditorKind
     let sharedEventID: String
     let currentUserID: String
+    let tint: Color
     var initialTitle: String = ""
     let initialMarkdown: String
     var initialIsPinned: Bool = false
@@ -43,6 +44,8 @@ struct HostPostEditorView: View {
     let mediaUploader: TiptapMediaUploader
     let onSave: (HostPostDraft) -> Void
     let onCancel: () -> Void
+
+    @Environment(\.appTheme) private var theme
 
     // State
     @StateObject private var controller = TiptapEditorController()
@@ -74,7 +77,8 @@ struct HostPostEditorView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
@@ -110,6 +114,7 @@ struct HostPostEditorView: View {
                 }
             }
         }
+        .presentationBackground(theme.palette.background)
         .interactiveDismissDisabled(true)
         .photosPicker(
             isPresented: Binding(
@@ -221,10 +226,13 @@ struct HostPostEditorView: View {
                 } label: {
                     Text(saveLabel)
                         .font(.system(size: 14, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.white.adaptivePrimaryText)
+                        .foregroundStyle(.black)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(Capsule().fill(LGradients.header))
+                        .background {
+                            BubblyIconMaterial(tint: tint)
+                                .clipShape(Capsule())
+                        }
                         .opacity(canSave ? 1 : 0.45)
                 }
                 .buttonStyle(.plain)
@@ -238,24 +246,30 @@ struct HostPostEditorView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
-                        .foregroundStyle(LGradients.header)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
                         .frame(width: 38, height: 38)
-                        .background(LColors.glassSurface, in: Circle())
-                        .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
             }
 
             if kind == .post {
-                HStack {
-                    Toggle(isOn: $isPinned) {
-                        Text("Pin to the top of the timeline")
-                            .font(.system(size: 12, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary)
-                    }
-                    .toggleStyle(.switch)
-                    .tint(LColors.accent)
+                HStack(spacing: 12) {
+                    Text("Pin to the top of the timeline")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundStyle(theme.palette.textSecondary)
+
+                    Spacer()
+
+                    LureliaSlidingIconToggle(
+                        isOn: $isPinned,
+                        iconName: "pin",
+                        accentColor: tint,
+                        accessibilityLabel: "Pin to the top of the timeline",
+                        usesIconMaterial: true
+                    )
                 }
             }
         }
@@ -310,11 +324,11 @@ struct HostPostEditorView: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(LColors.glassSurface2),
+                    .fill(theme.palette.surface),
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(LColors.glassBorder, lineWidth: 1),
+                    .strokeBorder(tint, lineWidth: 1),
             )
         }
     }
@@ -325,11 +339,11 @@ struct HostPostEditorView: View {
         toolbarButtons
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LColors.glassSurface2),
+                    .fill(theme.palette.surface),
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(LColors.glassBorder, lineWidth: 1),
+                    .strokeBorder(tint, lineWidth: 1),
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
@@ -411,23 +425,22 @@ struct HostPostEditorView: View {
         Button(action: action) {
             Text(label)
                 .font(.system(size: 11, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(.black)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 30)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .fill(isActive ? Color.white.opacity(0.85).opacity(0.32) : LColors.glassSurface2),
-                )
+                .background {
+                    BubblyIconMaterial(tint: tint)
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
+                        )
+                }
                 .overlay(
                     RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .strokeBorder(
-                            isActive ? LColors.accent.opacity(0.72) : LColors.glassBorder,
-                            lineWidth: 1,
-                        ),
+                        .strokeBorder(tint, lineWidth: isActive ? 2 : 1),
                 )
         }
         .buttonStyle(.plain)
@@ -438,40 +451,47 @@ struct HostPostEditorView: View {
     // MARK: Editor area
 
     private var editorArea: some View {
-        GlassCard(cornerRadius: 20, padding: 4) {
-            ZStack {
-                TiptapEditorWebView(
-                    controller: controller,
-                    initialMarkdown: initialMarkdown,
-                )
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 320, idealHeight: 460, maxHeight: 560)
+        ZStack {
+            TiptapEditorWebView(
+                controller: controller,
+                initialMarkdown: initialMarkdown,
+            )
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 320, idealHeight: 460, maxHeight: 560)
 
-                if !controller.isReady {
-                    VStack(spacing: 8) {
-                        ProgressView()
-                            .tint(LColors.accent)
-                        Text("Preparing editor…")
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary)
-                    }
-                }
-
-                if isUploading {
-                    VStack(spacing: 8) {
-                        ProgressView()
-                            .tint(LColors.accent)
-                        Text("Uploading…")
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
-                    }
-                    .padding(18)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(Color.black.opacity(0.55)),
-                    )
+            if !controller.isReady {
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .tint(tint)
+                    Text("Preparing editor…")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundStyle(theme.palette.textSecondary)
                 }
             }
+
+            if isUploading {
+                VStack(spacing: 8) {
+                    ProgressView()
+                        .tint(tint)
+                    Text("Uploading…")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+                }
+                .padding(18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.black.opacity(0.55)),
+                )
+            }
+        }
+        .padding(4)
+        .background(
+            theme.palette.surface,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(tint, lineWidth: 1)
         }
     }
 

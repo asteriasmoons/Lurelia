@@ -1,0 +1,32 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/SkipRoutineTaskWidgetIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Skip Routine Task",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skips a single routine task from the widget.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "Task ID",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 21
+        }
+      }
+    ]
+  },
+  "version": 1
+}

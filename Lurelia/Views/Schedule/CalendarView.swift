@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct CalendarView: View {
+    @Environment(\.appTheme) private var theme
+
     private let calendar = Calendar.current
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 7)
 
@@ -28,13 +30,20 @@ struct CalendarView: View {
     }
 
     var body: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 16) {
-                header
+        VStack(alignment: .leading, spacing: 16) {
+            header
 
-                dayGrid
-            }
+            dayGrid
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(LSpacing.cardPadding)
+        .background {
+            BubblyCardMaterial(
+                tint: theme.palette.primaryAction,
+                cornerRadius: 24
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .padding(.horizontal, 20)
     }
 
@@ -65,7 +74,8 @@ struct CalendarView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(Color.white.opacity(0.90))
+                    .foregroundStyle(theme.palette.secondaryAccent)
+                    .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
                     .frame(width: 16, height: 16)
                 .frame(width: 34, height: 34)
             }
@@ -78,17 +88,13 @@ struct CalendarView: View {
             } label: {
                 Text("Today")
                     .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundStyle(Color.white.opacity(0.90))
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 10)
                     .frame(height: 30)
                     .fixedSize(horizontal: true, vertical: false)
                     .background {
-                        Capsule(style: .continuous)
-                            .fill(LColors.neutralGlassHighlight.opacity(0.045))
-                            .overlay {
-                                Capsule(style: .continuous)
-                                    .strokeBorder(LColors.neutralGlassHighlight.opacity(0.22), lineWidth: 1)
-                            }
+                        BubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                            .clipShape(Capsule(style: .continuous))
                     }
             }
             .buttonStyle(.plain)
@@ -100,7 +106,8 @@ struct CalendarView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .foregroundStyle(Color.white.opacity(0.90))
+                    .foregroundStyle(theme.palette.secondaryAccent)
+                    .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
                     .frame(width: 16, height: 16)
                 .frame(width: 34, height: 34)
             }
@@ -129,12 +136,7 @@ struct CalendarView: View {
 
     private func dayBubble(_ day: CalendarDayBubble) -> some View {
         ZStack {
-            Circle()
-                .fill(dayCircleFill(for: day))
-                .overlay {
-                    Circle()
-                        .strokeBorder(dayCircleStroke(for: day), lineWidth: day.isToday ? 1.2 : 1)
-                }
+            dayCircle(for: day)
 
             Text(day.numberText)
                 .font(.system(size: 13, weight: day.isToday ? .black : .bold, design: .rounded))
@@ -145,22 +147,35 @@ struct CalendarView: View {
         .opacity(day.isCurrentMonth ? 1 : 0.35)
     }
 
+    @ViewBuilder
+    private func dayCircle(for day: CalendarDayBubble) -> some View {
+        if day.isToday {
+            BubblyIconMaterial(tint: theme.palette.indicators)
+                .clipShape(Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(theme.palette.indicators, lineWidth: 1.2)
+                }
+        } else {
+            Circle()
+                .fill(dayCircleFill(for: day))
+                .overlay {
+                    Circle()
+                        .strokeBorder(dayCircleStroke(for: day), lineWidth: 1)
+                }
+        }
+    }
+
     private func dayForeground(for day: CalendarDayBubble) -> Color {
         if day.isToday { return .white }
         return day.isCurrentMonth ? LColors.textPrimary : LColors.textSecondary
     }
 
     private func dayCircleFill(for day: CalendarDayBubble) -> AnyShapeStyle {
-        if day.isToday {
-            return AnyShapeStyle(LColors.neutralGlassHighlight.opacity(0.065))
-        }
         return AnyShapeStyle(LColors.neutralGlassHighlight.opacity(day.isCurrentMonth ? 0.035 : 0.02))
     }
 
     private func dayCircleStroke(for day: CalendarDayBubble) -> AnyShapeStyle {
-        if day.isToday {
-            return AnyShapeStyle(LColors.neutralPearl.opacity(0.68))
-        }
         return AnyShapeStyle(LColors.neutralGlassHighlight.opacity(day.isCurrentMonth ? 0.16 : 0.08))
     }
 

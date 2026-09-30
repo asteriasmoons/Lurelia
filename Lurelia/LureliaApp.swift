@@ -24,10 +24,12 @@ struct LureliaApp: App {
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var routineMidnightResetTask: Task<Void, Never>?
+    @StateObject private var reportRouter = LureliaReportRouter()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(reportRouter)
                 .task {
                     await purgeOrphanedReminders()
                     await backfillReminderFireTimes()
@@ -37,6 +39,7 @@ struct LureliaApp: App {
                     await migrateKanbanModelsToAppGroup()
                     await migrateHabitModelsToAppGroup()
                     await migrateHabitLogsAndSkipsToAppGroup()
+                    await backfillHabitCompletionFireTimes()
                     await migrateJourneyModelsToAppGroup()
                     await migrateRoutineModelsToAppGroup()
                     await migrateRoutineStatsAndUserSettingsToAppGroup()
@@ -44,6 +47,7 @@ struct LureliaApp: App {
                     await deduplicateAllChildEntities()
                     await exportReminderIconsForWidget()
                     HabitManager.shared.setup(container: sharedModelContainer)
+                    RoutineTaskManager.shared.setup(container: sharedModelContainer)
                     RoutineManager.shared.resetRoutinesIfNewDay(context: sharedModelContainer.mainContext)
                     scheduleRoutineMidnightReset()
 
@@ -878,6 +882,50 @@ struct LureliaApp: App {
         }
 
         defaults.set(true, forKey: migrationKey)
+    }
+
+    private func backfillHabitCompletionFireTimes() async {
+        let context = sharedModelContainer.mainContext
+        let calendar = Calendar.current
+
+        guard let habits = try? context.fetch(FetchDescriptor<LureliaHabit>()),
+              let logs = try? context.fetch(FetchDescriptor<LureliaHabitLog>())
+        else {
+            return
+        }
+
+        var habitsByID: [String: LureliaHabit] = [:]
+        for habit in habits where habitsByID[habit.id.uuidString] == nil {
+            habitsByID[habit.id.uuidString] = habit
+        }
+        var changed = false
+
+        for log in logs where log.count > 0 {
+            guard let habit = log.habit ?? habitsByID[log.habitIDString] else {
+                continue
+            }
+
+            if log.habit == nil {
+                log.habit = habit
+                changed = true
+            }
+
+            if log.habitIDString != habit.id.uuidString {
+                log.habitIDString = habit.id.uuidString
+                changed = true
+            }
+
+            let fireDates = habit.fireDates(on: log.dayStart, calendar: calendar)
+            if log.backfillCompletedFireTimes(from: fireDates, calendar: calendar) {
+                changed = true
+            }
+        }
+
+        guard changed else { return }
+
+        try? context.save()
+        LureliaWidgetReloads.reloadAll()
+        print("[Lurelia] Backfilled habit completion fire times")
     }
 
     private func migrateJourneyModelsToAppGroup() async {

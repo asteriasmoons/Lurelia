@@ -25,6 +25,17 @@ struct KanbanHabitCreateRequest: Identifiable {
     let column: KanbanColumn
 }
 
+struct KanbanQuickTaskCreateRequest: Identifiable {
+    let id = UUID()
+    let column: KanbanColumn
+    let suggestedDate: Date?
+
+    init(column: KanbanColumn, suggestedDate: Date? = nil) {
+        self.column = column
+        self.suggestedDate = suggestedDate
+    }
+}
+
 // MARK: - Kanban Column Add Menu
 
 struct KanbanColumnAddCardMenu<LabelContent: View>: View {
@@ -35,6 +46,7 @@ struct KanbanColumnAddCardMenu<LabelContent: View>: View {
     let allHabits: [LureliaHabit]
     let onCreateReminder: () -> Void
     let onCreateHabit: () -> Void
+    let onCreateQuickTask: () -> Void
     let onAddCard: (KanbanCardType, String) -> Void
     let onAddTask: (LureliaRoutine) -> Void
     @ViewBuilder var label: () -> LabelContent
@@ -85,6 +97,20 @@ struct KanbanColumnAddCardMenu<LabelContent: View>: View {
 
     var body: some View {
         Menu {
+            Button {
+                onCreateQuickTask()
+            } label: {
+                Label {
+                    Text("Add Quick Task")
+                        .foregroundStyle(.white)
+                } icon: {
+                    Image("starnote")
+                        .renderingMode(.template)
+                        .foregroundStyle(.white)
+                }
+                .foregroundStyle(.white)
+            }
+
             Menu {
                 Button {
                     onCreateReminder()
@@ -147,7 +173,8 @@ struct KanbanColumnAddCardMenu<LabelContent: View>: View {
         } label: {
             label()
         }
-        .buttonStyle(.plain)
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
     }
 
     @ViewBuilder
@@ -192,7 +219,7 @@ struct KanbanRoutineTaskCreationSheet: View {
     let onCreated: (LureliaRoutineTask) -> Void
 
     var body: some View {
-        AddCustomRoutineTaskView { draft in
+        AddCustomRoutineTaskView(tint: Color(lureliaHex: routine.colorHex)) { draft in
             addTask(from: draft)
         }
     }
@@ -297,16 +324,323 @@ struct KanbanRoutineTaskCreationSheet: View {
     }
 }
 
+// MARK: - Kanban Quick Task Creation Sheet
+
+struct AddKanbanQuickTaskSheet: View {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
+
+    @Bindable var column: KanbanColumn
+    private let editingTask: KanbanQuickTask?
+
+    @State private var name = ""
+    @State private var details = ""
+    @State private var hasDate: Bool
+    @State private var hasTime = false
+    @State private var selectedDate: Date
+    @State private var hour: Int
+    @State private var minute: Int
+
+    init(
+        column: KanbanColumn,
+        editingTask: KanbanQuickTask? = nil,
+        suggestedDate: Date? = nil
+    ) {
+        self.column = column
+        self.editingTask = editingTask
+
+        let initialDate = editingTask?.taskDate ?? suggestedDate ?? Date()
+        let initialTime = editingTask?.taskTime ?? initialDate
+        let components = Calendar.current.dateComponents([.hour, .minute], from: initialTime)
+        _name = State(initialValue: editingTask?.name ?? "")
+        _details = State(initialValue: editingTask?.details ?? "")
+        _hasDate = State(initialValue: editingTask?.taskDate != nil || suggestedDate != nil)
+        _hasTime = State(initialValue: editingTask?.taskTime != nil)
+        _selectedDate = State(initialValue: initialDate)
+        _hour = State(initialValue: components.hour ?? 9)
+        _minute = State(initialValue: components.minute ?? 0)
+    }
+
+    private var accent: Color {
+        Color(lureliaHex: column.colorHex)
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var body: some View {
+        ZStack {
+            theme.palette.background
+                .ignoresSafeArea()
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 20) {
+                    header
+                    taskFields
+                    scheduleSection
+                    saveButton
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 18)
+                .padding(.bottom, 40)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .presentationDetents([.large])
+        .presentationBackground(theme.palette.background)
+        .lureliaDismissKeyboardOnTap()
+        .onChange(of: hasDate) { _, isEnabled in
+            if !isEnabled {
+                hasTime = false
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(editingTask == nil ? "New Quick Task" : "Edit Quick Task")
+                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+
+                Text(column.name)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(accent)
+            }
+
+            Spacer(minLength: 8)
+
+            Button { dismiss() } label: {
+                Image("xmarkwavy")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var taskFields: some View {
+        VStack(spacing: 14) {
+            TextField("Quick task name", text: $name)
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
+                .padding(.horizontal, 16)
+                .frame(height: 54)
+                .background {
+                    BubblyCardMaterial(tint: accent, cornerRadius: 18)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(accent.opacity(0.76), lineWidth: 1.2)
+                }
+                .onSubmit { save() }
+
+            TextEditor(text: $details)
+                .font(.system(size: 14, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
+                .scrollContentBackground(.hidden)
+                .padding(12)
+                .frame(minHeight: 112)
+                .background {
+                    BubblyCardMaterial(tint: accent, cornerRadius: 18)
+                }
+                .overlay(alignment: .topLeading) {
+                    if details.isEmpty {
+                        Text("Description (optional)")
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundStyle(theme.palette.textSecondary)
+                            .padding(.horizontal, 17)
+                            .padding(.vertical, 20)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(accent.opacity(0.76), lineWidth: 1.2)
+                }
+        }
+    }
+
+    private var scheduleSection: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Date")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+
+                Spacer()
+
+                LureliaSlidingIconToggle(
+                    isOn: $hasDate,
+                    iconName: "ringstarcal",
+                    accentColor: accent,
+                    accessibilityLabel: "Quick Task Date",
+                    usesIconMaterial: true
+                )
+            }
+
+            if hasDate {
+                HStack {
+                    Text("Time")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+
+                    Spacer()
+
+                    LureliaSlidingIconToggle(
+                        isOn: $hasTime,
+                        iconName: "clockwavy",
+                        accentColor: accent,
+                        accessibilityLabel: "Quick Task Time",
+                        usesIconMaterial: true
+                    )
+                }
+
+                HStack(alignment: .top, spacing: 10) {
+                    LureliaCompactDateDrumPicker(
+                        date: $selectedDate,
+                        tint: accent,
+                        usesCardMaterial: true,
+                        usesDarkTypography: true
+                    )
+                    .frame(maxWidth: .infinity)
+
+                    if hasTime {
+                        LureliaCompactTimeDrumPicker(
+                            hour: $hour,
+                            minute: $minute,
+                            tint: accent,
+                            usesDarkTypography: true
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background {
+            BubblyCardMaterial(tint: accent, cornerRadius: 20)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(accent.opacity(0.58), lineWidth: 1)
+        }
+    }
+
+    private var saveButton: some View {
+        Button { save() } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Image(editingTask == nil ? "addwavy" : "checkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(Color.black.opacity(0.62))
+
+                    Image(editingTask == nil ? "addwavy" : "checkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.black)
+                        .bubblyIconMaterial(tint: .black)
+                }
+                .frame(width: 15, height: 15)
+
+                Text(editingTask == nil ? "Add Quick Task" : "Save Quick Task")
+                    .font(.system(size: 16, weight: .black, design: .rounded))
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background {
+                BubblyCardMaterial(tint: accent, cornerRadius: 20)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSave)
+        .opacity(canSave ? 1 : 0.42)
+    }
+
+    private func save() {
+        guard canSave else { return }
+
+        let calendar = Calendar.current
+        let storedDate = hasDate ? calendar.startOfDay(for: selectedDate) : nil
+        let storedTime: Date?
+        if hasDate && hasTime {
+            storedTime = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: selectedDate)
+        } else {
+            storedTime = nil
+        }
+
+        if let editingTask {
+            editingTask.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingTask.details = details.trimmingCharacters(in: .whitespacesAndNewlines)
+            editingTask.taskDate = storedDate
+            editingTask.taskTime = storedTime
+            editingTask.updatedAt = Date()
+            editingTask.column = column
+            column.board?.updatedAt = Date()
+            try? modelContext.save()
+            dismiss()
+            return
+        }
+
+        let task = KanbanQuickTask(
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            details: details.trimmingCharacters(in: .whitespacesAndNewlines),
+            taskDate: storedDate,
+            taskTime: storedTime
+        )
+        task.column = column
+        modelContext.insert(task)
+
+        if !(column.quickTasks ?? []).contains(where: { $0.id == task.id }) {
+            if column.quickTasks == nil {
+                column.quickTasks = []
+            }
+            column.quickTasks?.append(task)
+        }
+
+        let card = KanbanCard(
+            cardType: .quickTask,
+            itemID: task.id,
+            sortOrder: (column.cards ?? []).count
+        )
+        card.column = column
+        modelContext.insert(card)
+        if !(column.cards ?? []).contains(where: { $0.id == card.id }) {
+            if column.cards == nil {
+                column.cards = []
+            }
+            column.cards?.append(card)
+        }
+        column.board?.updatedAt = Date()
+
+        try? modelContext.save()
+        dismiss()
+    }
+}
+
 // MARK: - KanbanBoardView
 
 struct KanbanBoardView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @Bindable var board: KanbanBoard
 
     @Query private var allReminders: [LureliaReminder]
     @Query private var allRoutines: [LureliaRoutine]
     @Query private var allHabits: [LureliaHabit]
+    @Query private var allQuickTasks: [KanbanQuickTask]
     @Query private var allBoards: [KanbanBoard]
 
     @State private var showAddColumn = false
@@ -314,6 +648,7 @@ struct KanbanBoardView: View {
     @State private var createRequest: KanbanCreateRequest?
     @State private var taskCreateRequest: KanbanRoutineTaskCreateRequest?
     @State private var habitCreateRequest: KanbanHabitCreateRequest?
+    @State private var quickTaskCreateRequest: KanbanQuickTaskCreateRequest?
     @State private var showCompletionBanner = false
 
     private func triggerBanner() {
@@ -360,7 +695,8 @@ struct KanbanBoardView: View {
     var body: some View {
         NavigationStack {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 HStack {
@@ -373,13 +709,17 @@ struct KanbanBoardView: View {
                     HStack(spacing: 14) {
                         Button { showAddColumn = true } label: {
                             Image("addwavy").renderingMode(.template).resizable().scaledToFit()
-                                .frame(width: 28, height: 28).foregroundStyle(LGradients.header)
+                                .frame(width: 28, height: 28)
+                                .foregroundStyle(accentColor)
+                                .bubblyIconMaterial(tint: accentColor)
                         }
                         .buttonStyle(.plain)
 
                         Button { dismiss() } label: {
                             Image("xmarkwavy").renderingMode(.template).resizable().scaledToFit()
-                                .frame(width: 28, height: 28).foregroundStyle(LGradients.header)
+                                .frame(width: 28, height: 28)
+                                .foregroundStyle(.white)
+                                .bubblyIconMaterial(tint: .white)
                         }
                         .buttonStyle(.plain)
                     }
@@ -436,11 +776,15 @@ struct KanbanBoardView: View {
                                     allRoutines: allRoutines,
                                     allRoutineTasks: allRoutineTasks,
                                     allHabits: allHabits,
+                                    allQuickTasks: allQuickTasks,
                                     onCreateReminder: {
                                         createRequest = KanbanCreateRequest(type: .reminder, column: column)
                                     },
                                     onCreateHabit: {
                                         habitCreateRequest = KanbanHabitCreateRequest(column: column)
+                                    },
+                                    onCreateQuickTask: {
+                                        quickTaskCreateRequest = KanbanQuickTaskCreateRequest(column: column)
                                     },
                                     onAddCard: { type, itemID in
                                         pinCard(type: type, itemID: itemID, in: column)
@@ -458,7 +802,10 @@ struct KanbanBoardView: View {
                             Button { showAddColumn = true } label: {
                                 HStack(spacing: 10) {
                                     Image("addwavy").renderingMode(.template).resizable().scaledToFit()
-                                        .frame(width: 20, height: 20).foregroundStyle(LGradients.header)
+                                        .frame(width: 20, height: 20)
+                                        .foregroundStyle(accentColor)
+                                        .bubblyIconMaterial(tint: accentColor)
+                                        .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
                                     Text("Add Column")
                                         .font(.system(size: 14, weight: .bold, design: .rounded))
                                         .foregroundStyle(LColors.textSecondary)
@@ -488,7 +835,7 @@ struct KanbanBoardView: View {
             AddColumnView(board: board, column: col)
         }
         .sheet(item: $createRequest) { req in
-            AddReminderView(onCreated: { reminder in
+            LureliaReminderCreationFlow(onCreated: { reminder in
                 pinCard(type: .reminder, itemID: reminder.id.uuidString, in: req.column)
             })
         }
@@ -506,6 +853,12 @@ struct KanbanBoardView: View {
                 onClose: {
                     habitCreateRequest = nil
                 }
+            )
+        }
+        .sheet(item: $quickTaskCreateRequest) { request in
+            AddKanbanQuickTaskSheet(
+                column: request.column,
+                suggestedDate: request.suggestedDate
             )
         }
         .navigationDestination(for: UUID.self) { reminderID in
@@ -548,19 +901,39 @@ struct KanbanBoardView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(board.icon).renderingMode(.template).resizable().scaledToFit()
-                .frame(width: 48, height: 48).foregroundStyle(accentColor)
+                .frame(width: 48, height: 48)
+                .foregroundStyle(accentColor)
+                .bubblyIconMaterial(tint: accentColor)
             Text("No Columns Yet")
                 .font(.system(size: 21, weight: .bold, design: .rounded)).foregroundStyle(LColors.textPrimary)
             Text("Add columns to organize your board.")
                 .font(.system(size: 14, design: .rounded)).foregroundStyle(LColors.textSecondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 24)
             Button { showAddColumn = true } label: {
-                Text("Add Column")
-                    .font(.system(size: 15, weight: .black, design: .rounded)).foregroundStyle(LColors.textPrimary)
-                    .frame(maxWidth: .infinity).frame(height: 54)
-                    .background { LureliaNeutralGlassSurface(cornerRadius: 20) }
+                HStack {
+                    Spacer(minLength: 0)
+
+                    Text("Add Column")
+                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .foregroundStyle(.black)
+
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background {
+                    BubblyCardMaterial(
+                        tint: accentColor,
+                        cornerRadius: 20
+                    )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
-            .buttonStyle(.plain).padding(.horizontal, 40).padding(.top, 4)
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 40)
+            .padding(.top, 4)
         }
     }
 }
@@ -575,8 +948,10 @@ struct KanbanColumnView: View {
     let allRoutines: [LureliaRoutine]
     let allRoutineTasks: [LureliaRoutineTask]
     let allHabits: [LureliaHabit]
+    let allQuickTasks: [KanbanQuickTask]
     let onCreateReminder: () -> Void
     let onCreateHabit: () -> Void
+    let onCreateQuickTask: () -> Void
     let onAddCard: (KanbanCardType, String) -> Void
     let onAddTask: (LureliaRoutine) -> Void
     let onEditColumn: () -> Void
@@ -593,7 +968,7 @@ struct KanbanColumnView: View {
                 Spacer()
                 Text("\(column.sortedCards.count)")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(accentColor)
+                    .kanbanChipMaterial(tint: accentColor)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(accentColor.opacity(0.14), in: Capsule())
                 KanbanColumnAddCardMenu(
@@ -603,11 +978,15 @@ struct KanbanColumnView: View {
                     allHabits: allHabits,
                     onCreateReminder: onCreateReminder,
                     onCreateHabit: onCreateHabit,
+                    onCreateQuickTask: onCreateQuickTask,
                     onAddCard: onAddCard,
                     onAddTask: onAddTask
                 ) {
                     Image("addwavy").renderingMode(.template).resizable().scaledToFit()
-                        .frame(width: 18, height: 18).foregroundStyle(LGradients.header)
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(accentColor)
+                        .bubblyIconMaterial(tint: accentColor)
+                        .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
                 }
             }
             .padding(.horizontal, 14).padding(.top, 14)
@@ -618,10 +997,12 @@ struct KanbanColumnView: View {
                 ForEach(column.sortedCards) { card in
                     KanbanItemCard(
                         card: card,
+                        column: column,
                         allReminders: allReminders,
                         allRoutines: allRoutines,
                         allRoutineTasks: allRoutineTasks,
                         allHabits: allHabits,
+                        allQuickTasks: allQuickTasks,
                         columnAccent: accentColor,
                         onDelete: { deleteCard(card) },
                         onComplete: onComplete
@@ -653,9 +1034,7 @@ struct KanbanColumnView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(accentColor.opacity(0.10))
-                .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(accentColor.opacity(0.35), lineWidth: 1) }
+            BubblyCardMaterial(tint: accentColor, cornerRadius: 22)
         }
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .contextMenu {
@@ -673,7 +1052,15 @@ struct KanbanColumnView: View {
         }
     }
 
-    private func deleteCard(_ card: KanbanCard) { modelContext.delete(card); try? modelContext.save() }
+    private func deleteCard(_ card: KanbanCard) {
+        if card.cardType == .quickTask,
+           let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }) {
+            modelContext.delete(task)
+        }
+
+        modelContext.delete(card)
+        try? modelContext.save()
+    }
 
     private func deleteColumn() {
         if let cards = column.cards {
@@ -692,6 +1079,17 @@ struct KanbanColumnView: View {
 
     private func moveCard(_ card: KanbanCard, to targetColumn: KanbanColumn) {
         guard targetColumn.id != column.id else { return }
+
+        if card.cardType == .quickTask,
+           let task = allQuickTasks.first(where: { $0.matchesKanbanItemID(card.itemID) }) {
+            column.quickTasks = (column.quickTasks ?? []).filter { $0.id != task.id }
+            if targetColumn.quickTasks == nil {
+                targetColumn.quickTasks = []
+            }
+            targetColumn.quickTasks?.append(task)
+            task.updatedAt = Date()
+        }
+
         column.cards = (column.cards ?? []).filter { $0.id != card.id }
         card.sortOrder = (targetColumn.cards ?? []).count
         if targetColumn.cards == nil {
@@ -706,12 +1104,76 @@ struct KanbanColumnView: View {
 
 // MARK: - KanbanItemCard
 
+private let kanbanInnerCardSurface = Color.black.opacity(0.045)
+
+private struct KanbanColumnCardIcon: View {
+    let iconID: String
+    let accent: Color
+    var diameter: CGFloat = 36
+    var iconSize: CGFloat = 19
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.72))
+
+            BubblyIconMaterial(tint: accent)
+                .mask {
+                    Circle()
+                        .strokeBorder(lineWidth: 1.5)
+                }
+
+            LureliaIconView(iconId: iconID, size: iconSize)
+                .foregroundStyle(accent)
+                .bubblyIconMaterial(tint: accent)
+        }
+        .frame(width: diameter, height: diameter)
+    }
+}
+
+private extension View {
+    func kanbanChipMaterial(tint: Color) -> some View {
+        foregroundStyle(tint)
+            .bubblyIconMaterial(tint: tint)
+            .shadow(color: .black.opacity(0.32), radius: 1.5, x: 0, y: 1)
+    }
+
+    func kanbanChipBorder(tint: Color) -> some View {
+        overlay {
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Capsule()
+                        .strokeBorder(lineWidth: 1)
+                }
+                .allowsHitTesting(false)
+        }
+    }
+
+    func kanbanTaskTitle(isMuted: Bool = false) -> some View {
+        foregroundStyle(isMuted ? Color.black.opacity(0.62) : LColors.textPrimary)
+            .shadow(
+                color: .black.opacity(isMuted ? 0.24 : 0.56),
+                radius: isMuted ? 1 : 2,
+                x: 0,
+                y: 1
+            )
+    }
+
+    func kanbanTrashMaterial() -> some View {
+        foregroundStyle(Color.white)
+            .bubblyIconMaterial(tint: .white)
+            .shadow(color: .black.opacity(0.58), radius: 3, x: 0, y: 2)
+    }
+}
+
 struct KanbanItemCard: View {
     let card: KanbanCard
+    let column: KanbanColumn
     let allReminders: [LureliaReminder]
     let allRoutines: [LureliaRoutine]
     let allRoutineTasks: [LureliaRoutineTask]
     let allHabits: [LureliaHabit]
+    let allQuickTasks: [KanbanQuickTask]
     let columnAccent: Color
     let onDelete: () -> Void
     var onComplete: (() -> Void)? = nil
@@ -755,6 +1217,14 @@ struct KanbanItemCard: View {
                 )
             }
             .buttonStyle(.plain)
+        } else if let quickTask = quickTask {
+            KanbanQuickTaskCard(
+                task: quickTask,
+                column: column,
+                accent: columnAccent,
+                onDelete: onDelete,
+                onComplete: onComplete
+            )
         } else {
             orphanCard
         }
@@ -780,6 +1250,11 @@ struct KanbanItemCard: View {
         return allHabits.first { $0.matchesKanbanItemID(card.itemID) }
     }
 
+    private var quickTask: KanbanQuickTask? {
+        guard card.cardType == .quickTask else { return nil }
+        return allQuickTasks.first { $0.matchesKanbanItemID(card.itemID) }
+    }
+
     private var orphanCard: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle").foregroundStyle(LColors.textSecondary)
@@ -787,12 +1262,164 @@ struct KanbanItemCard: View {
             Spacer()
             Button(role: .destructive, action: onDelete) {
                 Image("trash").renderingMode(.template).resizable().scaledToFit()
-                    .frame(width: 14, height: 14).foregroundStyle(Color(lureliaHex: "#0db7d9"))
+                    .frame(width: 14, height: 14)
+                    .kanbanTrashMaterial()
             }
             .buttonStyle(.plain)
         }
         .padding(12)
-        .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14))
+        .background(kanbanInnerCardSurface, in: RoundedRectangle(cornerRadius: 14))
+    }
+}
+
+// MARK: - Kanban Quick Task Card
+
+struct KanbanQuickTaskCard: View {
+    @Environment(\.modelContext) private var modelContext
+    @Bindable var task: KanbanQuickTask
+    let column: KanbanColumn
+    let accent: Color
+    let onDelete: () -> Void
+    var onComplete: (() -> Void)? = nil
+
+    @State private var isEditing = false
+
+    private var scheduleText: String? {
+        guard let taskDate = task.taskDate else { return nil }
+
+        if let taskTime = task.taskTime {
+            let calendar = Calendar.current
+            var components = calendar.dateComponents([.year, .month, .day], from: taskDate)
+            let timeComponents = calendar.dateComponents([.hour, .minute], from: taskTime)
+            components.hour = timeComponents.hour
+            components.minute = timeComponents.minute
+
+            if let combined = calendar.date(from: components) {
+                return combined.formatted(date: .abbreviated, time: .shortened)
+            }
+        }
+
+        return taskDate.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(task.name)
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .kanbanTaskTitle(isMuted: task.isCompleted)
+                        .strikethrough(task.isCompleted, color: Color.black.opacity(0.5))
+                        .lineLimit(2)
+
+                    if !task.details.isEmpty {
+                        Text(task.details)
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(task.isCompleted ? Color.black.opacity(0.56) : LColors.textSecondary)
+                            .lineLimit(2)
+                    }
+
+                    if let scheduleText {
+                        Text(scheduleText)
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .kanbanChipMaterial(tint: accent)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(accent.opacity(0.12), in: Capsule())
+                            .kanbanChipBorder(tint: accent)
+                    }
+                }
+
+                Spacer(minLength: 8)
+                actionControls
+            }
+
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.black.opacity(0.18))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(accent.opacity(0.32), lineWidth: 1)
+                }
+        }
+        .sheet(isPresented: $isEditing) {
+            AddKanbanQuickTaskSheet(
+                column: column,
+                editingTask: task
+            )
+        }
+    }
+
+    private var actionControls: some View {
+        VStack(spacing: 6) {
+            completionCircle
+
+            HStack(spacing: 6) {
+                Button { isEditing = true } label: {
+                    quickTaskActionIcon("pencil", tint: accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit quick task")
+
+                Button(role: .destructive, action: onDelete) {
+                    quickTaskActionIcon("trash", tint: .white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Delete quick task")
+            }
+        }
+    }
+
+    private func quickTaskActionIcon(_ asset: String, tint: Color) -> some View {
+        Image(asset)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 11, height: 11)
+            .foregroundStyle(tint)
+            .bubblyIconMaterial(tint: tint)
+            .shadow(color: .black.opacity(0.52), radius: 2, x: 0, y: 1)
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+    }
+
+    private var completionCircle: some View {
+        Button { complete() } label: {
+            ZStack {
+                Circle()
+                    .fill(task.isCompleted ? accent.opacity(0.18) : Color.clear)
+                    .frame(width: 24, height: 24)
+                    .overlay {
+                        Circle()
+                            .strokeBorder(accent.opacity(0.82), lineWidth: 2)
+                    }
+
+                if task.isCompleted {
+                    Image("checkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 10, height: 10)
+                        .foregroundStyle(accent)
+                        .bubblyIconMaterial(tint: accent)
+                }
+            }
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(task.isCompleted)
+        .accessibilityLabel(task.isCompleted ? "Quick task completed" : "Complete quick task")
+    }
+
+    private func complete() {
+        guard !task.isCompleted else { return }
+        task.isCompleted = true
+        task.completedAt = Date()
+        task.updatedAt = Date()
+        try? modelContext.save()
+        onComplete?()
     }
 }
 
@@ -811,19 +1438,12 @@ struct KanbanRoutineCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 36, height: 36)
-
-                LureliaIconView(iconId: routine.icon, size: 19)
-                    .foregroundStyle(.white)
-            }
+            KanbanColumnCardIcon(iconID: routine.icon, accent: accent)
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(routine.name)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .kanbanTaskTitle()
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
@@ -838,7 +1458,7 @@ struct KanbanRoutineCard: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
+                .fill(kanbanInnerCardSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(accent.opacity(0.22), lineWidth: 1)
@@ -849,13 +1469,13 @@ struct KanbanRoutineCard: View {
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .kanbanChipMaterial(tint: accent)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(accent.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+            .kanbanChipBorder(tint: accent)
     }
 
     private var deleteButton: some View {
@@ -865,7 +1485,7 @@ struct KanbanRoutineCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
+                .kanbanTrashMaterial()
                 .frame(width: 30, height: 30)
                 .background(LColors.glassSurface, in: Circle())
                 .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
@@ -890,19 +1510,12 @@ struct KanbanRoutineTaskCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 36, height: 36)
-
-                LureliaIconView(iconId: task.icon, size: 19)
-                    .foregroundStyle(.white)
-            }
+            KanbanColumnCardIcon(iconID: task.icon, accent: accent)
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(task.title)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(task.isPending ? LColors.textPrimary : LColors.textSecondary)
+                    .kanbanTaskTitle(isMuted: !task.isPending)
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
@@ -919,25 +1532,25 @@ struct KanbanRoutineTaskCard: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
+                .fill(kanbanInnerCardSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(accent.opacity(0.22), lineWidth: 1)
                 }
         }
-        .opacity(task.isPending ? 1 : 0.72)
+        .opacity(task.isPending ? 1 : 0.90)
     }
 
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .kanbanChipMaterial(tint: accent)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(accent.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+            .kanbanChipBorder(tint: accent)
     }
 
     private var deleteButton: some View {
@@ -947,7 +1560,7 @@ struct KanbanRoutineTaskCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
+                .kanbanTrashMaterial()
                 .frame(width: 30, height: 30)
                 .background(LColors.glassSurface, in: Circle())
                 .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
@@ -1012,19 +1625,17 @@ struct KanbanHabitCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(Color.white.opacity(0.10))
-                    .frame(width: 36, height: 36)
-
-                LureliaIconView(iconId: habit.iconName ?? "flame", size: 19)
-                    .foregroundStyle(.white)
-            }
+            KanbanColumnCardIcon(
+                iconID: habit.iconName ?? "flame",
+                accent: accent
+            )
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(habit.title)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle((habit.isArchived || habit.isCompletedToday || todaysSkip != nil) ? LColors.textSecondary : LColors.textPrimary)
+                    .kanbanTaskTitle(
+                        isMuted: habit.isArchived || habit.isCompletedToday || todaysSkip != nil
+                    )
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
@@ -1040,25 +1651,25 @@ struct KanbanHabitCard: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
+                .fill(kanbanInnerCardSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(accent.opacity(0.22), lineWidth: 1)
                 }
         }
-        .opacity((habit.isArchived || habit.isCompletedToday || todaysSkip != nil) ? 0.72 : 1)
+        .opacity((habit.isArchived || habit.isCompletedToday || todaysSkip != nil) ? 0.90 : 1)
     }
 
     private func badge(_ label: String) -> some View {
         Text(label)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
-            .foregroundStyle(accent)
+            .kanbanChipMaterial(tint: accent)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
             .background(accent.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+            .kanbanChipBorder(tint: accent)
     }
 
     private var completionButton: some View {
@@ -1114,7 +1725,7 @@ struct KanbanHabitCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
+                .kanbanTrashMaterial()
                 .frame(width: 30, height: 30)
                 .background(LColors.glassSurface, in: Circle())
                 .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
@@ -1244,7 +1855,7 @@ struct KanbanRoutineTaskSourceColumnView: View {
 
                 Text("\(availableTaskCount)")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(boardAccent)
+                    .kanbanChipMaterial(tint: boardAccent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(boardAccent.opacity(0.14), in: Capsule())
@@ -1266,27 +1877,20 @@ struct KanbanRoutineTaskSourceColumnView: View {
         }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(boardAccent.opacity(0.08))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .strokeBorder(boardAccent.opacity(0.28), lineWidth: 1)
-                    }
-                }
+                BubblyCardMaterial(tint: boardAccent, cornerRadius: 22)
+            }
         }
     }
 
     private func routineSection(_ routine: LureliaRoutine) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.08))
-                        .frame(width: 34, height: 34)
-
-                    LureliaIconView(iconId: routine.icon, size: 16)
-                        .foregroundStyle(.white)
-                }
+                KanbanColumnCardIcon(
+                    iconID: routine.icon,
+                    accent: boardAccent,
+                    diameter: 34,
+                    iconSize: 16
+                )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(routine.name)
@@ -1321,20 +1925,17 @@ struct KanbanRoutineTaskSourceColumnView: View {
 
     private func routineTaskSourceRow(_ task: LureliaRoutineTask) -> some View {
         HStack(alignment: .center, spacing: 9) {
-            ZStack {
-                Circle()
-                    .fill(boardAccent.opacity(0.12))
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().strokeBorder(boardAccent.opacity(0.28), lineWidth: 1))
-
-                LureliaIconView(iconId: task.icon, size: 13)
-                    .foregroundStyle(boardAccent)
-            }
+            KanbanColumnCardIcon(
+                iconID: task.icon,
+                accent: boardAccent,
+                diameter: 28,
+                iconSize: 13
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(task.title)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .kanbanTaskTitle()
                     .lineLimit(2)
 
                 Text(task.hasDueTime ? task.formattedDueTime : "No due time")
@@ -1368,6 +1969,8 @@ struct KanbanRoutineTaskSourceColumnView: View {
                 .scaledToFit()
                 .frame(width: 14, height: 14)
                 .foregroundStyle(boardAccent)
+                .bubblyIconMaterial(tint: boardAccent)
+                .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
                 .frame(width: 30, height: 30)
                 .background(boardAccent.opacity(0.12), in: Circle())
                 .overlay(Circle().strokeBorder(boardAccent.opacity(0.32), lineWidth: 1))
@@ -1395,6 +1998,8 @@ struct KanbanRoutineTaskSourceColumnView: View {
                 .scaledToFit()
                 .frame(width: 13, height: 13)
                 .foregroundStyle(boardAccent)
+                .bubblyIconMaterial(tint: boardAccent)
+                .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
                 .frame(width: 30, height: 30)
                 .background(LColors.glassSurface, in: Circle())
                 .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
@@ -1446,7 +2051,7 @@ struct KanbanHabitSourceColumnView: View {
 
                 Text("\(habits.count)")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(boardAccent)
+                    .kanbanChipMaterial(tint: boardAccent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(boardAccent.opacity(0.14), in: Capsule())
@@ -1468,31 +2073,23 @@ struct KanbanHabitSourceColumnView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(boardAccent.opacity(0.08))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(boardAccent.opacity(0.28), lineWidth: 1)
-                }
+            BubblyCardMaterial(tint: boardAccent, cornerRadius: 22)
         }
     }
 
     private func habitSourceRow(_ habit: LureliaHabit) -> some View {
         HStack(alignment: .center, spacing: 9) {
-            ZStack {
-                Circle()
-                    .fill(boardAccent.opacity(0.12))
-                    .frame(width: 28, height: 28)
-                    .overlay(Circle().strokeBorder(boardAccent.opacity(0.28), lineWidth: 1))
-
-                LureliaIconView(iconId: habit.iconName ?? "flame", size: 13)
-                    .foregroundStyle(boardAccent)
-            }
+            KanbanColumnCardIcon(
+                iconID: habit.iconName ?? "flame",
+                accent: boardAccent,
+                diameter: 28,
+                iconSize: 13
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(habit.title)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .kanbanTaskTitle()
                     .lineLimit(2)
 
                 Text(habitScheduleSummary(habit))
@@ -1526,6 +2123,8 @@ struct KanbanHabitSourceColumnView: View {
                 .scaledToFit()
                 .frame(width: 14, height: 14)
                 .foregroundStyle(boardAccent)
+                .bubblyIconMaterial(tint: boardAccent)
+                .shadow(color: .black.opacity(0.42), radius: 3, x: 0, y: 2)
                 .frame(width: 30, height: 30)
                 .background(boardAccent.opacity(0.12), in: Circle())
                 .overlay(Circle().strokeBorder(boardAccent.opacity(0.32), lineWidth: 1))
@@ -1573,7 +2172,8 @@ struct KanbanInboxColumnView: View {
                 }
                 Spacer()
                 Text("\(reminders.count)")
-                    .font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(boardAccent)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .kanbanChipMaterial(tint: boardAccent)
                     .padding(.horizontal, 8).padding(.vertical, 4).background(boardAccent.opacity(0.14), in: Capsule())
             }
             .padding(.horizontal, 14).padding(.top, 14)
@@ -1605,9 +2205,7 @@ struct KanbanInboxColumnView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(boardAccent.opacity(0.08))
-                .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(boardAccent.opacity(0.28), lineWidth: 1) }
+            BubblyCardMaterial(tint: boardAccent, cornerRadius: 22)
         }
     }
 }
@@ -1648,33 +2246,32 @@ struct KanbanInboxReminderCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            ZStack {
-                Circle().fill(Color.white.opacity(0.10)).frame(width: 36, height: 36)
-                LureliaIconView(iconId: reminderIcon, size: 19).foregroundStyle(.white)
-            }
+            KanbanColumnCardIcon(iconID: reminderIcon, accent: accent)
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(reminder.title)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(reminder.isEnabled ? LColors.textPrimary : LColors.textSecondary)
+                    .kanbanTaskTitle(isMuted: !reminder.isEnabled)
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
                     ForEach(Array(allFireDates.prefix(2).enumerated()), id: \.offset) { _, d in
                         Text(d.formatted(date: .omitted, time: .shortened))
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(accent).lineLimit(1).minimumScaleFactor(0.75)
+                            .kanbanChipMaterial(tint: accent)
+                            .lineLimit(1).minimumScaleFactor(0.75)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(accent.opacity(0.12), in: Capsule())
-                            .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+                            .kanbanChipBorder(tint: accent)
                     }
                     if allFireDates.count > 2 {
                         Text("+\(allFireDates.count - 2)")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(accent).lineLimit(1)
+                            .kanbanChipMaterial(tint: accent)
+                            .lineLimit(1)
                             .padding(.horizontal, 6).padding(.vertical, 3)
                             .background(accent.opacity(0.12), in: Capsule())
-                            .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+                            .kanbanChipBorder(tint: accent)
                     }
                 }
             }
@@ -1684,7 +2281,7 @@ struct KanbanInboxReminderCard: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
+                .fill(kanbanInnerCardSurface)
                 .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(accent.opacity(0.22), lineWidth: 1) }
         }
         .opacity(reminder.isEnabled ? 1 : 0.65)
@@ -1784,15 +2381,12 @@ struct KanbanReminderCard: View {
     private func cardContent(overdue: Bool, dueNow: Bool, upcoming: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                ZStack {
-                    Circle().fill(Color.white.opacity(0.10)).frame(width: 36, height: 36)
-                    LureliaIconView(iconId: reminderIcon, size: 19).foregroundStyle(.white)
-                }
+                KanbanColumnCardIcon(iconID: reminderIcon, accent: accent)
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(reminder.title)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(reminder.isEnabled ? LColors.textPrimary : LColors.textSecondary)
+                        .kanbanTaskTitle(isMuted: !reminder.isEnabled)
                         .lineLimit(2)
                     badgeRow(overdue: overdue, dueNow: dueNow, upcoming: upcoming)
                 }
@@ -1817,7 +2411,7 @@ struct KanbanReminderCard: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(LColors.glassSurface2)
+                .fill(kanbanInnerCardSurface)
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(accent.opacity(0.22), lineWidth: 1)
@@ -1854,7 +2448,7 @@ struct KanbanReminderCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 13, height: 13)
-                .foregroundStyle(Color(lureliaHex: "#0db7d9"))
+                .kanbanTrashMaterial()
                 .frame(width: 30, height: 30)
                 .background(LColors.glassSurface, in: Circle())
                 .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.75), lineWidth: 1))
@@ -1868,24 +2462,24 @@ struct KanbanReminderCard: View {
             ForEach(Array(allFireDates.prefix(2).enumerated()), id: \.offset) { _, d in
                 Text(d.formatted(date: .omitted, time: .shortened))
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accent)
+                    .kanbanChipMaterial(tint: accent)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(accent.opacity(0.12), in: Capsule())
-                    .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+                    .kanbanChipBorder(tint: accent)
             }
 
             if allFireDates.count > 2 {
                 Text("+\(allFireDates.count - 2)")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(accent)
+                    .kanbanChipMaterial(tint: accent)
                     .lineLimit(1)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(accent.opacity(0.12), in: Capsule())
-                    .overlay(Capsule().strokeBorder(accent.opacity(0.28), lineWidth: 1))
+                    .kanbanChipBorder(tint: accent)
             }
 
             if overdue || dueNow || upcoming {
@@ -1893,13 +2487,13 @@ struct KanbanReminderCard: View {
                 let color = overdue ? Color(lureliaHex: "#ff9be6") : dueNow ? Color(lureliaHex: "#b476ff") : Color(lureliaHex: "#7eedff")
                 Text(label)
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundStyle(color)
+                    .kanbanChipMaterial(tint: color)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(color.opacity(0.12), in: Capsule())
-                    .overlay(Capsule().strokeBorder(color.opacity(0.28), lineWidth: 1))
+                    .kanbanChipBorder(tint: color)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1935,6 +2529,7 @@ struct KanbanReminderCard: View {
 struct AddColumnView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @Bindable var board: KanbanBoard
     var column: KanbanColumn?
 
@@ -1953,19 +2548,23 @@ struct AddColumnView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             VStack(spacing: 24) {
-                RoundedRectangle(cornerRadius: 3).fill(.white.opacity(0.3)).frame(width: 40, height: 5).padding(.top, 12)
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(theme.palette.textSecondary.opacity(0.45))
+                    .frame(width: 40, height: 5)
+                    .padding(.top, 12)
 
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(isEditing ? "Edit Column" : "New Column")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(theme.palette.textPrimary)
                         Text(isEditing ? "Update this column’s name and color." : "Add a column to \(board.name).")
                             .font(.system(size: 13, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(theme.palette.textSecondary)
                     }
                     Spacer()
                     Button { dismiss() } label: {
@@ -1974,43 +2573,72 @@ struct AddColumnView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 28, height: 28)
-                            .foregroundStyle(LColors.textPrimary)
+                            .foregroundStyle(.white)
+                            .bubblyIconMaterial(tint: .white)
                     }
                 }
                 .padding(.horizontal, 24)
 
                 LureliaFormSection(title: "Column Name") {
                     TextField("e.g. To Do, In Progress, Done", text: $name)
-                        .font(.system(size: 15, design: .rounded)).foregroundStyle(.white)
-                        .padding(14).background(.white.opacity(0.08))
+                        .font(.system(size: 15, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+                        .padding(14)
+                        .background(theme.palette.surface)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14)
-                                .strokeBorder(LColors.glassBorder, lineWidth: 1.1)
+                                .strokeBorder(theme.palette.primaryAction, lineWidth: 1.2)
                         )
                         .onSubmit { save() }
                 }
 
                 LureliaFormSection(title: "Color") {
                     ColorPicker(selection: $selectedColor, supportsOpacity: false) {
-                        Text("Column Color").font(.system(size: 14, weight: .semibold, design: .rounded)).foregroundStyle(LColors.textPrimary)
+                        Text("Column Color")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
                     }
                     .padding(14)
-                    .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14))
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(LColors.glassBorder, lineWidth: 1.1)
+                            .strokeBorder(theme.palette.secondaryAccent, lineWidth: 1.2)
                     )
                 }
 
                 Button { save() } label: {
                     HStack(spacing: 10) {
-                        Image(isEditing ? "checkwavy" : "addwavy").renderingMode(.template).resizable().scaledToFit().frame(width: 14, height: 14).foregroundStyle(.white)
-                        Text(isEditing ? "Save Changes" : "Add Column").font(.system(size: 16, weight: .black, design: .rounded))
+                        ZStack {
+                            Image(isEditing ? "checkwavy" : "addwavy")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundStyle(Color.black.opacity(0.58))
+
+                            Image(isEditing ? "checkwavy" : "addwavy")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundStyle(.black)
+                                .bubblyIconMaterial(tint: .black)
+                        }
+                        .frame(width: 14, height: 14)
+
+                        Text(isEditing ? "Save Changes" : "Add Column")
+                            .font(.system(size: 16, weight: .black, design: .rounded))
                     }
-                    .foregroundStyle(LColors.textPrimary).frame(maxWidth: .infinity).frame(height: 60)
-                    .background { LureliaNeutralGlassSurface(cornerRadius: 22) }
-                    .shadow(color: LColors.neutralPearl.opacity(0.10), radius: 18, y: 10)
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background {
+                        BubblyCardMaterial(
+                            tint: theme.palette.indicators,
+                            cornerRadius: 22
+                        )
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: theme.palette.indicators.opacity(0.14), radius: 18, y: 10)
                 }
                 .buttonStyle(.plain).disabled(!canSave).opacity(canSave ? 1 : 0.45).padding(.horizontal, 24)
 
@@ -2018,6 +2646,8 @@ struct AddColumnView: View {
             }
         }
         .presentationDetents([.medium])
+        .presentationBackground(theme.palette.background)
+        .lureliaDismissKeyboardOnTap()
     }
 
     private func save() {

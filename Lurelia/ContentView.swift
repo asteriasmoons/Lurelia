@@ -10,6 +10,8 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var reportRouter: LureliaReportRouter
     @Query private var settings: [UserSettings]
 
     var body: some View {
@@ -21,6 +23,19 @@ struct ContentView: View {
             } else {
                 OnboardingView()
             }
+        }
+        .onOpenURL { url in
+            reportRouter.handleReportConversationURL(url)
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: LureliaReportConversationNotificationManager.conversationNotificationOpened
+        )) { notification in
+            guard let reportID = notification.object as? String else { return }
+            reportRouter.handleReportConversationID(reportID)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await LureliaReportConversationNotificationManager.scanForNewMessages() }
         }
     }
 
@@ -36,5 +51,6 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(LureliaReportRouter())
         .modelContainer(for: UserSettings.self, inMemory: true)
 }

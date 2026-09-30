@@ -12,8 +12,10 @@ import SwiftData
 
 struct SharedEventCalendarSyncCard: View {
     let event: SharedEventDTO
+    let tint: Color
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
     @StateObject private var eventService = LureliaEventService.shared
 
     @State private var mirror: SharedEventAppleMirror?
@@ -23,8 +25,7 @@ struct SharedEventCalendarSyncCard: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
                 header
 
                 if !hasCalendarAccess {
@@ -33,10 +34,12 @@ struct SharedEventCalendarSyncCard: View {
                     } label: {
                         Text("Allow calendar access")
                             .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(Color.white.adaptivePrimaryText)
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Capsule().fill(LGradients.header))
+                            .background {
+                                BubblyCardMaterial(tint: tint, cornerRadius: 18)
+                            }
                     }
                     .buttonStyle(.plain)
                 } else {
@@ -59,7 +62,12 @@ struct SharedEventCalendarSyncCard: View {
                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                         .foregroundStyle(LColors.textSecondary)
                 }
-            }
+        }
+        .padding(16)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(tint, lineWidth: 1)
         }
         .task { await load() }
     }
@@ -75,10 +83,13 @@ struct SharedEventCalendarSyncCard: View {
             if let mirror, mirror.isEnabled {
                 Text(mirror.syncMode.rawValue.uppercased())
                     .font(.system(size: 9, weight: .black, design: .rounded))
-                    .foregroundStyle(Color.white.adaptivePrimaryText)
+                    .foregroundStyle(.black)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(LGradients.header))
+                    .background {
+                        BubblyIconMaterial(tint: tint)
+                            .clipShape(Capsule())
+                    }
             }
         }
     }
@@ -95,28 +106,19 @@ struct SharedEventCalendarSyncCard: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(LColors.textSecondary)
             } else {
-                Menu {
-                    ForEach(calendars) { cal in
-                        Button(cal.title) { pickedCalendarID = cal.id }
-                    }
-                } label: {
-                    HStack {
-                        Text(currentCalendarLabel(from: calendars))
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
-                        Spacer()
-                        Text("▾")
-                            .font(.system(size: 12, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(LColors.glassBorder, lineWidth: 1),
-                    )
-                }
+                LureliaGradientDropdown(
+                    placeholder: "Choose a calendar",
+                    options: calendars.map(\.id),
+                    selection: calendarSelectionBinding,
+                    label: { calendarID in
+                        calendars.first(where: { $0.id == calendarID })?.title ?? "Calendar"
+                    },
+                    tint: tint,
+                    usesCardMaterial: true,
+                    usesDarkTypography: true,
+                    iconTint: .black,
+                    maxVisibleOptions: 4
+                )
             }
         }
     }
@@ -148,10 +150,12 @@ struct SharedEventCalendarSyncCard: View {
             } label: {
                 Text(isBusy ? "Syncing…" : "Apply")
                     .font(.system(size: 13, weight: .black, design: .rounded))
-                    .foregroundStyle(Color.white.adaptivePrimaryText)
+                    .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Capsule().fill(LGradients.header))
+                    .background {
+                        BubblyCardMaterial(tint: tint, cornerRadius: 18)
+                    }
             }
             .buttonStyle(.plain)
             .disabled(isBusy || pickedCalendarID.isEmpty || pickedMode == .off)
@@ -166,7 +170,8 @@ struct SharedEventCalendarSyncCard: View {
                         .foregroundStyle(LColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(LColors.danger.opacity(0.6)))
+                        .background(theme.palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(tint, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .disabled(isBusy)
@@ -181,20 +186,22 @@ struct SharedEventCalendarSyncCard: View {
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(isActive ? Color.black : theme.palette.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(
+                .background {
+                    if isActive {
+                        BubblyIconMaterial(tint: tint)
+                            .clipShape(RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
+                            .fill(theme.palette.surface)
+                    }
+                }
+                .overlay {
                     RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .fill(isActive ? LColors.gradientBlue.opacity(0.32) : LColors.glassSurface2),
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .strokeBorder(
-                            isActive ? LColors.accent.opacity(0.7) : LColors.glassBorder,
-                            lineWidth: 1,
-                        ),
-                )
+                        .strokeBorder(tint, lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
     }
@@ -203,11 +210,11 @@ struct SharedEventCalendarSyncCard: View {
 
     private var hasCalendarAccess: Bool { eventService.hasCalendarAccess }
 
-    private func currentCalendarLabel(from calendars: [LureliaAppleCalendarSource]) -> String {
-        if let match = calendars.first(where: { $0.id == pickedCalendarID }) {
-            return match.title
-        }
-        return "Choose a calendar"
+    private var calendarSelectionBinding: Binding<String?> {
+        Binding(
+            get: { pickedCalendarID.isEmpty ? nil : pickedCalendarID },
+            set: { pickedCalendarID = $0 ?? "" }
+        )
     }
 
     // MARK: - Actions

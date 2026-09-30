@@ -12,10 +12,12 @@ import WidgetKit
 struct ReminderDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     let reminder: LureliaReminder
 
     @State private var historyExpanded = false
+    @State private var showEditor = false
     @State private var isCompleting = false
     @State private var frictionEditing = false
     @State private var frictionDraft = ""
@@ -34,6 +36,10 @@ struct ReminderDetailView: View {
         let icon = reminder.icon.trimmingCharacters(in: .whitespacesAndNewlines)
         return icon.isEmpty ? "bellfill" : icon
     }
+
+    private var useFullScreenCover: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
     
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(
@@ -46,7 +52,7 @@ struct ReminderDetailView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -54,20 +60,40 @@ struct ReminderDetailView: View {
 
                     // MARK: - Header
 
-                    HStack {
-                        Text("Reminder Detail")
+                    HStack(spacing: 12) {
+                        Text("Reminder")
                             .font(.system(size: 30, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
 
                         Spacer()
+
+                        Button { showEditor = true } label: {
+                            Image("settings")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 17, height: 17)
+                                .foregroundStyle(.black)
+                                .frame(width: 40, height: 40)
+                                .background {
+                                    BubblyIconMaterial(tint: reminder.color)
+                                        .clipShape(Circle())
+                                }
+                        }
+                        .buttonStyle(.plain)
 
                         Button { dismiss() } label: {
                             Image("xmarkwavy")
                                 .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 28, height: 28)
-                                .foregroundStyle(reminder.color)
+                                .frame(width: 17, height: 17)
+                                .foregroundStyle(.black)
+                                .frame(width: 40, height: 40)
+                                .background {
+                                    BubblyIconMaterial(tint: reminder.color)
+                                        .clipShape(Circle())
+                                }
                         }
                         .buttonStyle(.plain)
                     }
@@ -76,25 +102,20 @@ struct ReminderDetailView: View {
 
                     // MARK: - Icon + Title + Description
 
-                    GlassCard(tint: reminder.color) {
-                        VStack(spacing: 10) {
+                    VStack(spacing: 10) {
                             ZStack {
                                 Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color.white.opacity(0.85).opacity(0.22), Color.white.opacity(0.85).opacity(0.20)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(Color.black.opacity(0.42))
                                     .frame(width: 64, height: 64)
 
                                 Circle()
-                                    .strokeBorder(reminder.color, lineWidth: 1.15)
+                                    .strokeBorder(reminder.color, lineWidth: 1.4)
+                                    .bubblyIconMaterial(tint: reminder.color)
                                     .frame(width: 64, height: 64)
 
                                 LureliaIconView(iconId: reminderIcon, size: 38)
                                     .foregroundStyle(reminder.color)
+                                    .bubblyIconMaterial(tint: reminder.color)
                             }
 
                             Text(reminder.title)
@@ -109,8 +130,11 @@ struct ReminderDetailView: View {
                                     .foregroundStyle(.white.opacity(0.55))
                                     .multilineTextAlignment(.center)
                             }
-                        }
-                        .frame(maxWidth: .infinity)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(18)
+                    .background {
+                        BubblyCardMaterial(tint: reminder.color, cornerRadius: 22)
                     }
                     .padding(.horizontal, 24)
 
@@ -142,6 +166,7 @@ struct ReminderDetailView: View {
                                     .resizable().scaledToFit()
                                     .frame(width: 20, height: 20)
                                     .foregroundStyle(reminder.color)
+                                    .bubblyIconMaterial(tint: reminder.color)
                                 Text("Streaks")
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white)
@@ -168,6 +193,7 @@ struct ReminderDetailView: View {
                                     .resizable().scaledToFit()
                                     .frame(width: 20, height: 20)
                                     .foregroundStyle(reminder.color)
+                                    .bubblyIconMaterial(tint: reminder.color)
                                 Text("Status & Time")
                                     .font(.system(size: 18, weight: .bold, design: .rounded))
                                     .foregroundStyle(.white)
@@ -225,6 +251,10 @@ struct ReminderDetailView: View {
                                                         item.isCompleted ? AnyShapeStyle(Color.clear) : AnyShapeStyle(reminder.color),
                                                         lineWidth: 1.3
                                                     )
+                                                    .bubblyIconMaterial(
+                                                        tint: reminder.color,
+                                                        isEnabled: !item.isCompleted
+                                                    )
                                                     .frame(width: 18, height: 18)
 
                                                 if item.isCompleted {
@@ -278,6 +308,18 @@ struct ReminderDetailView: View {
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             resetChecklistIfNeededForCurrentOccurrence()
+        }
+        .sheet(isPresented: Binding(
+            get: { !useFullScreenCover && showEditor },
+            set: { showEditor = $0 }
+        )) {
+            AddReminderView(editingReminder: reminder)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { useFullScreenCover && showEditor },
+            set: { showEditor = $0 }
+        )) {
+            AddReminderView(editingReminder: reminder)
         }
     }
 
@@ -429,7 +471,7 @@ struct ReminderDetailView: View {
     }
 
     private func statusCard(_ status: ReminderStatus) -> some View {
-        GlassCard(tint: reminder.color) {
+        tintedCard {
             VStack(alignment: .leading, spacing: 6) {
                 Text("STATUS")
                     .font(.system(size: 8, weight: .black, design: .rounded))
@@ -448,7 +490,7 @@ struct ReminderDetailView: View {
         let next = reminder.nextFireAt ?? reminder.scheduledDate
         let diff = next.timeIntervalSince(now)
 
-        return GlassCard(tint: reminder.color) {
+        return tintedCard {
             VStack(alignment: .leading, spacing: 6) {
                 Text("TIME")
                     .font(.system(size: 8, weight: .black, design: .rounded))
@@ -516,10 +558,12 @@ struct ReminderDetailView: View {
                             Text("Open in Maps")
                                 .font(.system(size: 14, weight: .bold, design: .rounded))
                         }
-                        .foregroundStyle(reminder.color.adaptivePrimaryText)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(reminder.color, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background {
+                            BubblyCardMaterial(tint: reminder.color, cornerRadius: 14)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -538,7 +582,7 @@ struct ReminderDetailView: View {
     // MARK: - Streak Card
 
     private func streakCard(label: String, value: String, unit: String) -> some View {
-        GlassCard(tint: reminder.color) {
+        tintedCard {
             VStack(alignment: .leading, spacing: 6) {
                 Text(label.uppercased())
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -644,17 +688,29 @@ struct ReminderDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(icon).renderingMode(.template).resizable().scaledToFit()
-                    .frame(width: 20, height: 20).foregroundStyle(reminder.color)
+                    .frame(width: 20, height: 20)
+                    .foregroundStyle(reminder.color)
+                    .bubblyIconMaterial(tint: reminder.color)
                 Text(title)
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
             }
-            GlassCard(tint: reminder.color) {
+            tintedCard {
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 24)
+    }
+
+    private func tintedCard<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(18)
+            .background {
+                BubblyCardMaterial(tint: reminder.color, cornerRadius: 22)
+            }
     }
 
     private func sectionLabel(_ text: String) -> some View {

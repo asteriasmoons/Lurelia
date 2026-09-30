@@ -10,6 +10,7 @@ import WidgetKit
 
 struct RemindersView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Query(sort: \LureliaReminder.scheduledDate)
     private var reminders: [LureliaReminder]
@@ -98,7 +99,8 @@ struct RemindersView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
                 let _ = reminderDebugCounts
 
                 ScrollView(showsIndicators: false) {
@@ -118,7 +120,8 @@ struct RemindersView: View {
                                         .resizable()
                                         .scaledToFit()
                                         .frame(width: 30, height: 30)
-                                        .foregroundStyle(LGradients.header)
+                                        .foregroundStyle(theme.palette.primaryAction)
+                                        .bubblyIconMaterial(tint: theme.palette.primaryAction)
                                 }
                                 .buttonStyle(.plain)
 
@@ -132,7 +135,8 @@ struct RemindersView: View {
                                         .resizable()
                                         .scaledToFit()
                                         .frame(width: 30, height: 30)
-                                        .foregroundStyle(LGradients.header)
+                                        .foregroundStyle(theme.palette.indicators)
+                                        .bubblyIconMaterial(tint: theme.palette.indicators)
                                 }
                                 .buttonStyle(.plain)
 
@@ -142,7 +146,8 @@ struct RemindersView: View {
                                         .resizable()
                                         .scaledToFit()
                                         .frame(width: 30, height: 30)
-                                        .foregroundStyle(LGradients.header)
+                                        .foregroundStyle(.white)
+                                        .bubblyIconMaterial(tint: .white)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -150,8 +155,10 @@ struct RemindersView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 20)
 
-                        overviewCard
-                            .padding(.horizontal, 24)
+                        // Overview card intentionally hidden. Keep the
+                        // implementation below available for a future return.
+                        // overviewCard
+                        //     .padding(.horizontal, 24)
 
                         if filteredReminders.isEmpty {
                             emptyState
@@ -193,13 +200,13 @@ struct RemindersView: View {
                 get: { !useFullScreenCover && showAddReminder },
                 set: { showAddReminder = $0 }
             )) {
-                AddReminderView()
+                LureliaReminderCreationFlow()
             }
             .fullScreenCover(isPresented: Binding(
                 get: { useFullScreenCover && showAddReminder },
                 set: { showAddReminder = $0 }
             )) {
-                AddReminderView()
+                LureliaReminderCreationFlow()
             }
             .sheet(item: Binding(
                 get: { useFullScreenCover ? nil : editingReminder },
@@ -660,25 +667,21 @@ struct LureliaReminderCard: View {
 
     @ViewBuilder
     private func cardContent(overdue: Bool, dueNow: Bool, upcoming: Bool) -> some View {
-        GlassCard(tint: reminder.color) {
-            VStack(spacing: 14) {
+        VStack(spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
                     ZStack {
                         Circle()
-                            .fill(Color.white.opacity(0.10))
+                            .fill(Color.black.opacity(0.42))
                             .frame(width: 54, height: 54)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(reminder.color, lineWidth: 1.8)
-                            )
 
                         Circle()
-                            .fill(Color.white.opacity(0.08))
-                            .frame(width: 38, height: 38)
-                            .blur(radius: 10)
+                            .strokeBorder(reminder.color, lineWidth: 1.8)
+                            .bubblyIconMaterial(tint: reminder.color)
+                            .frame(width: 54, height: 54)
 
                         LureliaIconView(iconId: reminderIcon, size: 33)
                             .foregroundStyle(reminder.color)
+                            .bubblyIconMaterial(tint: reminder.color)
                     }
                     .frame(width: 54, height: 54)
                     .layoutPriority(1)
@@ -686,19 +689,19 @@ struct LureliaReminderCard: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(reminder.title)
                             .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(reminder.isEnabled ? LColors.textPrimary : LColors.textSecondary)
+                            .foregroundStyle(.black)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         if !reminder.category.isEmpty {
                             Text(reminder.category)
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
-                                .foregroundStyle(accent).padding(.horizontal, 7).padding(.vertical, 4)
+                                .foregroundStyle(.black).padding(.horizontal, 7).padding(.vertical, 4)
                                 .background(accent.opacity(0.12), in: Capsule())
                         }
                         if let notes = reminder.notes, !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text(notes)
                                 .font(.system(size: 12, design: .rounded))
-                                .foregroundStyle(LColors.textSecondary.opacity(0.75)).lineLimit(2)
+                                .foregroundStyle(.black).lineLimit(2)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -746,7 +749,10 @@ struct LureliaReminderCard: View {
                     } label: { reminderActionButton(title: "Delete", icon: "trash") }
                         .buttonStyle(.plain)
                 }
-            }
+        }
+        .padding(18)
+        .background {
+            BubblyCardMaterial(tint: reminder.color, cornerRadius: 24)
         }
         .opacity(isCompleting ? 0.72 : (reminder.isEnabled ? 1 : 0.65))
         .scaleEffect(isCompleting ? 0.985 : 1)
@@ -777,10 +783,10 @@ struct LureliaReminderCard: View {
                         : AnyShapeStyle(Color.clear)
                     )
                     .frame(width: 30, height: 30)
-                    .overlay {
-                        Circle()
-                            .strokeBorder(reminder.color, lineWidth: 2)
-                    }
+                Circle()
+                    .strokeBorder(reminder.color, lineWidth: 2)
+                    .bubblyIconMaterial(tint: reminder.color)
+                    .frame(width: 30, height: 30)
                 if reminder.isCompleted && reminder.repeatUnit == .none {
                     Image("checkwavy")
                         .renderingMode(.template)
@@ -798,7 +804,7 @@ struct LureliaReminderCard: View {
     private var fireTimesGrid: some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], alignment: .center, spacing: 8) {
             ForEach(Array(allFireDates.enumerated()), id: \.offset) { _, d in
-                reminderBubbleText(d.formatted(date: .omitted, time: .shortened), color: accent)
+                reminderTimePill(d.formatted(date: .omitted, time: .shortened))
             }
         }
     }
@@ -824,11 +830,11 @@ struct LureliaReminderCard: View {
 
                         Text("Completion Steps")
                             .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary.opacity(0.9))
+                            .foregroundStyle(.black)
 
                         Text("\(reminder.checklistCompletedCount)/\(reminder.checklistTotalCount)")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary.opacity(0.82))
+                            .foregroundStyle(.black)
 
                         Spacer()
 
@@ -909,8 +915,8 @@ struct LureliaReminderCard: View {
 
                 Text(item.title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(item.isCompleted ? LColors.textSecondary.opacity(0.68) : LColors.textPrimary.opacity(0.9))
-                    .strikethrough(item.isCompleted, color: LColors.textSecondary.opacity(0.7))
+                    .foregroundStyle(.black)
+                    .strikethrough(item.isCompleted, color: Color.black.opacity(0.7))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -921,25 +927,61 @@ struct LureliaReminderCard: View {
     }
 
     private func reminderBubbleText(_ title: String, color: Color) -> some View {
-        // Solid reminder-color fill (same visual weight as the Edit/Skip/
-        // Delete action buttons below). Label is WCAG-adaptive so it's
-        // legible on any hue.
         Text(title).font(.system(size: 11, weight: .bold, design: .rounded))
-            .foregroundStyle(reminder.color.adaptivePrimaryText)
+            .foregroundStyle(.black)
             .lineLimit(1).minimumScaleFactor(0.72)
             .frame(maxWidth: .infinity).padding(.vertical, 10)
-            .background(reminder.color, in: RoundedRectangle(cornerRadius: 14))
+            .background {
+                BubblyIconMaterial(tint: reminder.color)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(reminder.color.opacity(0.7), lineWidth: 1))
+    }
+
+    private func reminderTimePill(_ title: String) -> some View {
+        HStack(spacing: 6) {
+            Image("clockfill")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+                .foregroundStyle(.black)
+
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background {
+            BubblyIconMaterial(tint: reminder.color)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(reminder.color.opacity(0.7), lineWidth: 1)
+        )
     }
 
     private func reminderMetaPill(icon: String, title: String) -> some View {
         HStack(spacing: 6) {
-            Image(icon).renderingMode(.template).resizable().scaledToFit().frame(width: 13, height: 13)
-            Text(title).font(.system(size: 12, weight: .bold, design: .rounded)).lineLimit(1)
+            Image(icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+            Text(title)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .lineLimit(1)
         }
-        .foregroundStyle(reminder.color.adaptivePrimaryText)
+        .foregroundStyle(.black)
         .frame(maxWidth: .infinity).padding(.vertical, 10)
-        .background(reminder.color, in: RoundedRectangle(cornerRadius: 14))
+        .background {
+            BubblyIconMaterial(tint: reminder.color)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(reminder.color.opacity(0.7), lineWidth: 1))
     }
 
@@ -949,23 +991,32 @@ struct LureliaReminderCard: View {
             Text(title).font(.system(size: 12, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.85)
             Spacer()
         }
-        .foregroundStyle(reminder.color.adaptivePrimaryText)
+        .foregroundStyle(.black)
         .padding(.horizontal, 12).padding(.vertical, 10).frame(maxWidth: .infinity)
-        .background(reminder.color, in: RoundedRectangle(cornerRadius: 14))
+        .background {
+            BubblyIconMaterial(tint: reminder.color)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(reminder.color.opacity(0.7), lineWidth: 1))
     }
 
     private func reminderActionButton(title: String, icon: String) -> some View {
         HStack(spacing: 6) {
-            Image(icon).renderingMode(.template).resizable().scaledToFit().frame(width: 13, height: 13)
-            Text(title).font(.system(size: 12, weight: .bold, design: .rounded))
+            Image(icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 13, height: 13)
+            Text(title)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
         }
-        // Solid reminder-color fill; label adapts (dark ink on light
-        // reminder colors, white on dark ones) so it's always legible.
-        .foregroundStyle(reminder.color.adaptivePrimaryText)
+        .foregroundStyle(.black)
         .frame(maxWidth: .infinity).frame(height: 40)
-        .background(reminder.color, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(reminder.color.opacity(0.7), lineWidth: 1))
+        .background {
+            BubblyIconMaterial(tint: reminder.color)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(reminder.color.opacity(0.78), lineWidth: 1))
     }
 
     private func weekdayName(_ weekday: Int) -> String? {

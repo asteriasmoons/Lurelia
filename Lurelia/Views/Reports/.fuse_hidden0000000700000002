@@ -1,0 +1,558 @@
+//
+//  LureliaReportConversationView.swift
+//  Lurelia
+//
+
+import QuickLook
+import SwiftData
+import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
+
+struct LureliaReportConversationView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
+    @StateObject private var service = LureliaReportConversationService()
+    @State private var draft = ""
+    @State private var attachmentPreviewURL: URL?
+    @State private var didPerformInitialScroll = false
+
+    private let conversationBottomID = "lurelia-conversation-bottom"
+
+    let report: SubmittedReport
+
+    var body: some View {
+        ZStack {
+            LureliaBackground()
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                LureliaReportHeader(
+                    eyebrow: "VOXIVERSE",
+                    title: "Private Conversation",
+                    eyebrowColor: theme.palette.secondaryAccent,
+                    bubbly: true
+                ) {
+                    dismiss()
+                }
+                .padding(.horizontal, LSpacing.pageHorizontal)
+                .padding(.top, 24)
+                .padding(.bottom, 8)
+
+                conversationBody
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                bottomConversationBar
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .task {
+            await service.load(report: report, modelContext: modelContext, markRead: true)
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: LureliaReportConversationNotificationManager.conversationDataDidChange
+        )) { _ in
+            Task {
+                await service.load(report: report, modelContext: modelContext, markRead: true)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task {
+                await service.load(report: report, modelContext: modelContext, markRead: true)
+            }
+        }
+        .quickLookPreview($attachmentPreviewURL)
+    }
+
+    @ViewBuilder
+    private var conversationBody: some View {
+        if service.isLoading && service.snapshot == nil {
+            loadingState
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        reportContextCard
+                        stateContent
+                        Color.clear.frame(height: 1).id(conversationBottomID)
+                    }
+                    .padding(.horizontal, LSpacing.pageHorizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 18)
+                }
+                .scrollDismissesKeyboard(.immediately)
+                .contentShape(Rectangle())
+                .simultaneousGesture(TapGesture().onEnded {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                })
+                .onAppear {
+                    scrollToConversationBottom(using: proxy, animated: false)
+                }
+                .onChange(of: service.displayedMessages.count) { _, _ in
+                    scrollToConversationBottom(using: proxy, animated: didPerformInitialScroll)
+                    didPerformInitialScroll = true
+                }
+                .onChange(of: service.snapshot?.acceptsReplies) { _, acceptsReplies in
+                    if acceptsReplies == false {
+                        scrollToConversationBottom(using: proxy, animated: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var bottomConversationBar: some View {
+        if bottomConversationBarIsVisible {
+            composer
+        }
+    }
+
+    private var bottomConversationBarIsVisible: Bool {
+        guard !(service.isLoading && service.snapshot == nil) else { return false }
+        return currentState != .declined
+    }
+
+    private var loadingState: some View {
+        VStack(spacing: 12) {
+            LureliaConversationLoadingRing()
+            Text("Loading private conversation…")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(LColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func scrollToConversationBottom(using proxy: ScrollViewProxy, animated: Bool) {
+        Task { @MainActor in
+            await Task.yield()
+            await Task.yield()
+            if animated {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    proxy.scrollTo(conversationBottomID, anchor: .bottom)
+                }
+            } else {
+                proxy.scrollTo(conversationBottomID, anchor: .bottom)
+            }
+        }
+    }
+
+    private var reportContextCard: some View {
+        GlassCard(cornerRadius: 24, borderColor: theme.palette.primaryAction) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(report.reportID)
+                    .font(.system(size: 12, weight: .black, design: .rounded))
+                    .tracking(2)
+                    .bubblyIconMaterial(tint: theme.palette.primaryAction)
+
+                Text(report.title)
+                    .font(.system(size: 20, weight: .black, design: .rounded))
+                    .foregroundStyle(LColors.headingPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Private report conversation with Voxiverse.")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var stateContent: some View {
+        if let error = service.errorMessage {
+            errorCard(error)
+        }
+
+        switch currentState {
+        case .notStarted:
+            emptyState
+        case .invited:
+            invitationState
+        case .accepted:
+            messagesState
+        case .declined:
+            declinedState
+        }
+    }
+
+    private func errorCard(_ message: String) -> some View {
+        GlassCard(cornerRadius: 18) {
+            Text(message)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(LColors.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var emptyState: some View {
+        GlassCard(cornerRadius: 24, borderColor: theme.palette.secondaryAccent) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image("inbox")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                    .accessibilityHidden(true)
+                Text("No invitation yet")
+                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                Text("If Voxiverse needs to privately discuss this report, the invitation and first message will appear here.")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var invitationState: some View {
+        VStack(alignment: .center, spacing: 14) {
+            GlassCard(cornerRadius: 24, borderColor: theme.palette.secondaryAccent) {
+                VStack(alignment: .center, spacing: 16) {
+                    Image("chatstar")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 38, height: 38)
+                        .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                        .accessibilityHidden(true)
+
+                    VStack(spacing: 8) {
+                        Text("Voxiverse sent you a message")
+                            .font(.system(size: 20, weight: .black, design: .rounded))
+                            .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("The Voxiverse team invited you to a private conversation about this submitted report.")
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(LColors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(spacing: 4) {
+                        Text(report.reportID)
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .tracking(1.5)
+                            .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                            .multilineTextAlignment(.center)
+
+                        Text(report.title)
+                            .font(.system(size: 16, weight: .black, design: .rounded))
+                            .foregroundStyle(LColors.headingPrimary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity)
+                    .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(LColors.accents.contrast, lineWidth: 1.2)
+                    }
+
+                    Text("Accepting lets you reply in this private thread. Declining closes the invitation.")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(LColors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if service.isUpdatingInvitation {
+                        ProgressView()
+                            .tint(LColors.accents.primary)
+                            .accessibilityLabel("Updating invitation")
+                    }
+
+                    VStack(spacing: 10) {
+                        Button {
+                            Task { await service.accept(report: report, modelContext: modelContext) }
+                        } label: {
+                            Text("Accept")
+                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .foregroundStyle(LColors.textPrimary)
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                                .background {
+                                    BubblyTileSurface(tint: theme.palette.primaryAction, cornerRadius: 18)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(service.isUpdatingInvitation)
+                        .opacity(service.isUpdatingInvitation ? 0.6 : 1)
+                        .accessibilityLabel("Accept private conversation invitation")
+
+                        Button {
+                            Task { await service.decline(report: report, modelContext: modelContext) }
+                        } label: {
+                            Text("Decline")
+                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .foregroundStyle(LColors.textPrimary)
+                                .frame(maxWidth: .infinity, minHeight: 50)
+                                .background {
+                                    BubblyTileSurface(tint: theme.palette.secondaryAccent, cornerRadius: 18)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(service.isUpdatingInvitation)
+                        .opacity(service.isUpdatingInvitation ? 0.6 : 1)
+                        .accessibilityLabel("Decline private conversation invitation")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+
+            if let firstMessage = firstStaffMessage {
+                messageBubble(firstMessage)
+                    .id(firstMessage.id)
+            }
+        }
+    }
+
+    private var messagesState: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if messages.isEmpty {
+                GlassCard(cornerRadius: 24, borderColor: theme.palette.secondaryAccent) {
+                    Text("No messages yet.")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                ForEach(messages) { message in
+                    messageBubble(message)
+                        .id(message.id)
+                }
+            }
+
+            if service.snapshot?.acceptsReplies == false {
+                Text("This conversation is currently read only. Voxiverse can turn replies back on at any time.")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.text.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .id("read-only-status")
+            }
+        }
+    }
+
+    private var declinedState: some View {
+        GlassCard(cornerRadius: 24, borderColor: theme.palette.secondaryAccent) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image("xmarkwavy")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                Text("Invitation declined")
+                    .font(.system(size: 18, weight: .black, design: .rounded))
+                    .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                Text("This report conversation is closed on your side. Voxiverse can see that you declined.")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func messageBubble(_ message: LureliaReportConversationMessage) -> some View {
+        HStack {
+            if message.isFromReporter { Spacer(minLength: 60) }
+
+            VStack(alignment: message.isFromReporter ? .trailing : .leading, spacing: 4) {
+                VStack(alignment: message.isFromReporter ? .trailing : .leading, spacing: 4) {
+                    Text(message.isFromReporter ? "You" : "Voxiverse")
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .foregroundStyle(LColors.text.primary)
+
+                    if !message.body.isEmpty {
+                        Text(message.body)
+                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineSpacing(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text(message.createdAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(LColors.text.primary.opacity(0.8))
+
+                    if message.isFromReporter && message.deliveryState != .sent {
+                        HStack(spacing: 8) {
+                            Text(message.deliveryState == .sending ? "Sending…" : "Failed to send")
+                                .font(.system(size: 9, weight: .bold, design: .rounded))
+                            if message.deliveryState == .failed {
+                                Button("Retry") {
+                                    service.retryReporterMessage(message.id, report: report, modelContext: modelContext)
+                                }
+                                .font(.system(size: 9, weight: .black, design: .rounded))
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .foregroundStyle(message.deliveryState == .failed ? LColors.text.primary : LColors.text.primary.opacity(0.8))
+                    }
+
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background {
+                    BubblyTileSurface(
+                        tint: message.isFromReporter
+                            ? theme.palette.secondaryAccent
+                            : theme.palette.indicators,
+                        cornerRadius: 18
+                    )
+                }
+
+                ForEach(message.attachments) { attachment in
+                    Button {
+                        openAttachment(attachment)
+                    } label: {
+                        attachmentLabel(attachment)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Open \(attachment.name)")
+                }
+            }
+
+            if !message.isFromReporter { Spacer(minLength: 60) }
+        }
+    }
+
+    @ViewBuilder
+    private func attachmentLabel(_ attachment: LureliaConversationAttachment) -> some View {
+        if UTType(attachment.typeIdentifier)?.conforms(to: .image) == true,
+           let image = UIImage(data: attachment.data) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 180, height: 120, alignment: .top)
+                .background(LColors.surface.nested)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(LColors.accents.contrast, lineWidth: 2)
+                }
+                .shadow(color: LColors.accents.contrast.opacity(0.3), radius: 6)
+        } else {
+            HStack(spacing: 8) {
+                Image("attach")
+                    .resizable()
+                    .renderingMode(.template)
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                    .foregroundStyle(LColors.accents.primary)
+                Text(attachment.name)
+            }
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(LColors.text.primary)
+            .lineLimit(1)
+            .padding(10)
+            .background(LColors.surface.nested, in: RoundedRectangle(cornerRadius: 10))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(LColors.accents.contrast, lineWidth: 1)
+            }
+        }
+    }
+
+    private func openAttachment(_ attachment: LureliaConversationAttachment) {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent(URL(fileURLWithPath: attachment.name).lastPathComponent)
+            try attachment.data.write(to: url, options: .atomic)
+            attachmentPreviewURL = url
+        } catch {
+            service.errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Composer
+
+    private var composer: some View {
+        VStack(spacing: 8) {
+            if let error = service.errorMessage {
+                Text(error)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(LColors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            LureliaConversationComposer(
+                draft: $draft,
+                isEnabled: canSendMessages,
+                isSending: service.isSending,
+                disabledMessage: currentState == .accepted
+                    ? "Replies are currently turned off."
+                    : currentState == .invited
+                        ? "Accept the invitation to reply."
+                        : "Waiting for Voxiverse to send the first message…"
+            ) { message, attachments in
+                service.sendReporterMessage(message, attachments: attachments, report: report, modelContext: modelContext)
+            }
+        }
+        .padding(.horizontal, LSpacing.pageHorizontal)
+        .padding(.top, 10)
+        .padding(.bottom, 24)
+        .background(LColors.bg.opacity(0.96))
+    }
+
+    private var currentState: LureliaReportConversationState {
+        service.snapshot?.state ?? report.conversationState
+    }
+
+    private var messages: [LureliaReportConversationMessage] {
+        service.displayedMessages
+    }
+
+    private var firstStaffMessage: LureliaReportConversationMessage? {
+        messages.first { $0.senderRole == .staff }
+    }
+
+    private var canSendMessages: Bool {
+        currentState == .accepted && (service.snapshot?.acceptsReplies ?? true)
+    }
+}
+
+private struct LureliaConversationLoadingRing: View {
+    private var colors: [Color] {
+        [LColors.accents.contrast, LColors.accents.secondary, LColors.accents.primary]
+    }
+    private let dotCount = 15
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            let elapsed = timeline.date.timeIntervalSinceReferenceDate
+            ZStack {
+                ForEach(0..<dotCount, id: \.self) { index in
+                    let color = colors[index % colors.count]
+                    let pulse = 0.72 + (0.28 * (cos((elapsed * 5.2) - (Double(index) * 0.48)) + 1) / 2)
+                    BubblyIconMaterial(tint: color)
+                        .frame(width: 13, height: 13)
+                        .clipShape(Circle())
+                        .scaleEffect(pulse)
+                        .offset(y: -39)
+                        .rotationEffect(.degrees(Double(index) * (360 / Double(dotCount))))
+                }
+            }
+            .frame(width: 96, height: 96)
+            .rotationEffect(.degrees(elapsed * 42))
+        }
+        .frame(width: 96, height: 96)
+        .accessibilityLabel("Loading private conversation")
+    }
+}

@@ -39,21 +39,62 @@ private struct PhaseTaskSheetTarget: Identifiable {
     let mode: Mode
 }
 
+struct RoutineEditorLaunchRequest: Identifiable {
+    let id = UUID()
+    let routine: LureliaRoutine?
+    let color: Color
+}
+
+private struct RoutineDarkIconMaterialModifier: ViewModifier {
+    let tint: Color
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .foregroundStyle(tint)
+                .bubblyIconMaterial(tint: tint)
+                .overlay {
+                    content
+                        .foregroundStyle(Color.black.opacity(0.78))
+                }
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    func routineDarkIconMaterial(
+        tint: Color,
+        isEnabled: Bool = true
+    ) -> some View {
+        modifier(
+            RoutineDarkIconMaterialModifier(
+                tint: tint,
+                isEnabled: isEnabled
+            )
+        )
+    }
+}
+
 struct AddRoutineView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     
     @Query(sort: \LureliaRoutine.sortOrder)
     private var routines: [LureliaRoutine]
     
     @Query private var reminders: [LureliaReminder]
     
-    var editingRoutine: LureliaRoutine? = nil
-    var onCreated: ((LureliaRoutine) -> Void)? = nil
+    let editingRoutine: LureliaRoutine?
+    let onCreated: ((LureliaRoutine) -> Void)?
     
     @State private var name = ""
     @State private var timeOfDay: LureliaRoutineTimeOfDay = .morning
-    @State private var selectedColor: Color = LColors.gradientPurple
+    @State private var selectedColor: Color
     @State private var selectedIcon = "sparkle"
     @State private var showIconPicker = false
     
@@ -93,12 +134,21 @@ struct AddRoutineView: View {
     
     private var isEditing: Bool { editingRoutine != nil }
     private var canSave: Bool { !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var selectedColorFillTextColor: Color { selectedColor.wcagContrastingSolidTextColor }
+    init(
+        editingRoutine: LureliaRoutine? = nil,
+        initialColor: Color,
+        onCreated: ((LureliaRoutine) -> Void)? = nil
+    ) {
+        self.editingRoutine = editingRoutine
+        _selectedColor = State(initialValue: initialColor)
+        self.onCreated = onCreated
+    }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
                     .onTapGesture {
                         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                     }
@@ -112,45 +162,69 @@ struct AddRoutineView: View {
                                 .foregroundStyle(LColors.textPrimary)
                         }
                         
-                        field("Time of Day") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            sectionLabel("Time of Day")
+
                             HStack(spacing: 8) {
                                 ForEach(LureliaRoutineTimeOfDay.allCases, id: \.self) { tod in
                                     let isSelected = timeOfDay == tod
                                     Button {
                                         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) { timeOfDay = tod }
                                     } label: {
-                                    Text(tod.rawValue)
-                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(isSelected ? .white : LColors.textPrimary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 9)
-                                        .background(
-                                            isSelected ? AnyShapeStyle(LColors.neutralGlassHighlight.opacity(0.12)) : AnyShapeStyle(LColors.glassSurface),
-                                            in: RoundedRectangle(cornerRadius: LSpacing.inputRadius)
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: LSpacing.inputRadius)
-                                                .strokeBorder(isSelected ? LColors.neutralPearl.opacity(0.36) : LColors.glassBorder, lineWidth: 1)
-                                        )
-                                }
+                                        Text(tod.rawValue)
+                                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(isSelected ? Color.black : theme.palette.textPrimary)
+                                            .routineDarkIconMaterial(
+                                                tint: selectedColor,
+                                                isEnabled: isSelected
+                                            )
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 11)
+                                            .background {
+                                                if isSelected {
+                                                    BubblyIconMaterial(tint: selectedColor)
+                                                        .clipShape(RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous))
+                                                } else {
+                                                    RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous)
+                                                        .fill(theme.palette.surface)
+                                                }
+                                            }
+                                            .overlay {
+                                                RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous)
+                                                    .strokeBorder(
+                                                        isSelected ? selectedColor : theme.palette.textPrimary.opacity(0.12),
+                                                        lineWidth: 1
+                                                    )
+                                            }
+                                    }
                                     .buttonStyle(.plain)
                                 }
                             }
                         }
-                        
+
                         field("Color") {
                             HStack(spacing: 14) {
-                                ColorPicker("", selection: $selectedColor, supportsOpacity: false)
-                                    .labelsHidden()
-                                    .frame(width: 44, height: 44)
-                                Text("Tap to pick a color")
+                                ColorPicker(
+                                    "Routine Color",
+                                    selection: $selectedColor,
+                                    supportsOpacity: false
+                                )
+                                .labelsHidden()
+                                .frame(width: 44, height: 44)
+
+                                Text("Tap to change the routine color")
                                     .font(.system(size: 14, design: .rounded))
                                     .foregroundStyle(LColors.textSecondary)
+
                                 Spacer()
+
                                 Circle()
                                     .fill(selectedColor)
                                     .frame(width: 28, height: 28)
-                                    .overlay(Circle().strokeBorder(LColors.glassBorderStrong, lineWidth: 1))
+                                    .overlay {
+                                        Circle()
+                                            .strokeBorder(selectedColor, lineWidth: 1)
+                                    }
                             }
                         }
                         
@@ -158,19 +232,25 @@ struct AddRoutineView: View {
                             Button { showIconPicker = true } label: {
                                 HStack(spacing: 14) {
                                     LureliaIconView(iconId: selectedIcon, size: 26)
-                                        .foregroundStyle(LColors.textPrimary)
+                                        .foregroundStyle(selectedColor)
+                                        .bubblyIconMaterial(tint: selectedColor)
                                         .frame(width: 44, height: 44)
-                                        .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: LSpacing.inputRadius))
+                                        .background(theme.palette.raisedSurface, in: RoundedRectangle(cornerRadius: LSpacing.inputRadius))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: LSpacing.inputRadius, style: .continuous)
+                                                .strokeBorder(selectedColor, lineWidth: 1)
+                                        }
                                     Text("Choose icon")
                                         .font(.system(size: 14, design: .rounded))
-                                        .foregroundStyle(LColors.textSecondary)
+                                        .foregroundStyle(theme.palette.textSecondary)
                                     Spacer()
                                     Image("chevright")
                                         .renderingMode(.template)
                                         .resizable()
                                         .scaledToFit()
-                                        .frame(width: 13, height: 13)
-                                        .foregroundStyle(LColors.textSecondary.opacity(0.55))
+                                        .frame(width: 19, height: 19)
+                                        .foregroundStyle(selectedColor)
+                                        .bubblyIconMaterial(tint: selectedColor)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -196,60 +276,17 @@ struct AddRoutineView: View {
                         
                         // MARK: - Principles
                         
-                        field("Principles") {
-                            VStack(spacing: 10) {
-                                ForEach(principles.indices, id: \.self) { index in
-                                    HStack(spacing: 10) {
-                                        Text("\(index + 1).")
-                                            .font(.system(size: 14, weight: .black, design: .rounded))
-                                            .foregroundStyle(LColors.textSecondary)
-                                            .frame(width: 24)
-                                        Text(principles[index])
-                                            .font(.system(size: 14, design: .rounded))
-                                            .foregroundStyle(LColors.textPrimary)
-                                        Spacer()
-                                        Button { principles.remove(at: index) } label: {
-                                            Image("trash").renderingMode(.template).resizable().scaledToFit()
-                                                .frame(width: 13, height: 13).foregroundStyle(LColors.gradientCyan)
-                                        }.buttonStyle(.plain)
-                                    }
-                                    .padding(.vertical, 4)
-                                    if index < principles.count - 1 { Divider().overlay(LColors.glassBorder) }
-                                }
-                                if !principles.isEmpty { Divider().overlay(LColors.glassBorder) }
-                                HStack(spacing: 10) {
-                                    TextField("e.g. Progress over perfection", text: $newPrinciple)
-                                        .font(.system(size: 14, design: .rounded))
-                                        .foregroundStyle(LColors.textPrimary)
-                                    Button {
-                                        let trimmed = newPrinciple.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        guard !trimmed.isEmpty else { return }
-                                        principles.append(trimmed)
-                                        newPrinciple = ""
-                                    } label: {
-                                        Image("addwavy").renderingMode(.template).resizable().scaledToFit()
-                                            .frame(width: 14, height: 14).foregroundStyle(selectedColor)
-                                            .frame(width: 32, height: 32)
-                                            .background(LColors.glassSurface2, in: Circle())
-                                            .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
-                                    }.buttonStyle(.plain)
-                                }
-                            }
-                        }
+                        principlesSection
                         
                         // MARK: - Phases Toggle
                         
                         field("Phases") {
-                            Toggle(isOn: $phasesEnabled) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Enable phases")
-                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(LColors.textPrimary)
-                                    Text("Split this routine into named phases with their own tasks and schedules")
-                                        .font(.system(size: 11, design: .rounded))
-                                        .foregroundStyle(LColors.textSecondary)
-                                }
-                            }
+                            routineToggleRow(
+                                title: "Enable phases",
+                                subtitle: "Split this routine into named phases with their own tasks and schedules",
+                                isOn: $phasesEnabled,
+                                icon: "listcircle"
+                            )
                             .onChange(of: phasesEnabled) { oldValue, newValue in
                                 guard oldValue, !newValue else { return }
                                 // Populate the non-phase task editor immediately so tasks
@@ -257,24 +294,18 @@ struct AddRoutineView: View {
                                 // still preserves the original SwiftData task objects in-place.
                                 routineTasks = phaseDrafts.flatMap(\.tasks)
                             }
-                            .tint(LColors.gradientBlue)
                         }
                         
                         // MARK: - Reminders
                         
                         field("Reminders") {
                             VStack(alignment: .leading, spacing: 12) {
-                                Toggle(isOn: $reminderEnabled) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Enable reminders")
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                            .foregroundStyle(LColors.textPrimary)
-                                        Text("Send reminders at the start, halfway point, and end of this routine")
-                                            .font(.system(size: 11, design: .rounded))
-                                            .foregroundStyle(LColors.textSecondary)
-                                    }
-                                }
-                                .tint(LColors.gradientBlue)
+                                routineToggleRow(
+                                    title: "Enable reminders",
+                                    subtitle: "Send reminders at the start, halfway point, and end of this routine",
+                                    isOn: $reminderEnabled,
+                                    icon: "bellfill"
+                                )
                                 
                                 if reminderEnabled {
                                     VStack(alignment: .leading, spacing: 8) {
@@ -289,26 +320,26 @@ struct AddRoutineView: View {
                         // MARK: - Schedule (hidden when phases enabled)
                         
                         if !phasesEnabled {
-                            field("Schedule") {
-                                VStack(spacing: 14) {
-                                    Toggle(isOn: $scheduleEnabled) {
-                                        Text("Enable schedule")
-                                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                            .foregroundStyle(LColors.textPrimary)
-                                    }
-                                    .tint(LColors.gradientBlue)
-                                    
-                                    if scheduleEnabled {
-                                        scheduleContent(
-                                            selectedDays: $selectedDays,
-                                            startHour: $startHour,
-                                            startMinute: $startMinute,
-                                            endHour: $endHour,
-                                            endMinute: $endMinute,
-                                            durationMode: $durationMode,
-                                            durationMinutesOverride: $durationMinutesOverride
-                                        )
-                                    }
+                            VStack(alignment: .leading, spacing: 12) {
+                                sectionLabel("Schedule")
+
+                                routineToggleCard(
+                                    title: "Enable schedule",
+                                    subtitle: "Choose when this routine is scheduled",
+                                    isOn: $scheduleEnabled,
+                                    icon: "ringstarcal"
+                                )
+
+                                if scheduleEnabled {
+                                    scheduleContent(
+                                        selectedDays: $selectedDays,
+                                        startHour: $startHour,
+                                        startMinute: $startMinute,
+                                        endHour: $endHour,
+                                        endMinute: $endMinute,
+                                        durationMode: $durationMode,
+                                        durationMinutesOverride: $durationMinutesOverride
+                                    )
                                 }
                             }
                         }
@@ -316,7 +347,8 @@ struct AddRoutineView: View {
                         // MARK: - Tasks (hidden when phases enabled)
                         
                         if !phasesEnabled {
-                            field("Tasks") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                sectionLabel("Tasks")
                                 taskListContent(
                                     tasks: $routineTasks,
                                     onAdd: {
@@ -337,8 +369,6 @@ struct AddRoutineView: View {
                         
                         if phasesEnabled {
                             ForEach(phaseDrafts.indices, id: \.self) { phaseIndex in
-                                let phaseDraft = phaseDrafts[phaseIndex]
-                                
                                 // Use the phase name or fallback placeholder for the section header label
                                 field(phaseDrafts[phaseIndex].name.isEmpty ? "Phase \(phaseIndex + 1)" : phaseDrafts[phaseIndex].name) {
                                     VStack(spacing: 16) {
@@ -350,11 +380,12 @@ struct AddRoutineView: View {
                                             } label: {
                                                 LureliaIconView(iconId: phaseDrafts[phaseIndex].icon, size: 18)
                                                     .foregroundStyle(selectedColor)
+                                                    .bubblyIconMaterial(tint: selectedColor)
                                                     .frame(width: 38, height: 38)
-                                                    .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 10))
+                                                    .background(theme.palette.raisedSurface, in: RoundedRectangle(cornerRadius: 10))
                                                     .overlay(
                                                         RoundedRectangle(cornerRadius: 10)
-                                                            .strokeBorder(selectedColor.opacity(0.35), lineWidth: 1)
+                                                            .strokeBorder(selectedColor, lineWidth: 1)
                                                     )
                                             }
                                             .buttonStyle(.plain)
@@ -367,7 +398,9 @@ struct AddRoutineView: View {
                                             
                                             Button { phaseDrafts.remove(at: phaseIndex) } label: {
                                                 Image("trash").renderingMode(.template).resizable().scaledToFit()
-                                                    .frame(width: 14, height: 14).foregroundStyle(LColors.gradientCyan)
+                                                    .frame(width: 14, height: 14)
+                                                    .foregroundStyle(selectedColor)
+                                                    .bubblyIconMaterial(tint: selectedColor)
                                             }.buttonStyle(.plain)
                                         }
                                         
@@ -390,7 +423,9 @@ struct AddRoutineView: View {
                                         } label: {
                                             HStack(spacing: 10) {
                                                 Image("starcal").renderingMode(.template).resizable().scaledToFit()
-                                                    .frame(width: 14, height: 14).foregroundStyle(selectedColor)
+                                                    .frame(width: 18, height: 18)
+                                                    .foregroundStyle(selectedColor)
+                                                    .bubblyIconMaterial(tint: selectedColor)
                                                 
                                                 if phaseDrafts[phaseIndex].scheduleEnabled {
                                                     let days = phaseDrafts[phaseIndex].scheduledDays.sorted()
@@ -411,10 +446,10 @@ struct AddRoutineView: View {
                                                     .frame(width: 11, height: 11).foregroundStyle(LColors.textSecondary.opacity(0.55))
                                             }
                                             .padding(12)
-                                            .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14))
+                                            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14))
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 14)
-                                                    .strokeBorder(selectedColor.opacity(0.35), lineWidth: 1)
+                                                    .strokeBorder(selectedColor, lineWidth: 1)
                                             )
                                         }
                                         .buttonStyle(.plain)
@@ -429,18 +464,20 @@ struct AddRoutineView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image("addwavy").renderingMode(.template).resizable().scaledToFit()
-                                        .frame(width: 10, height: 10).foregroundStyle(.white)
+                                        .frame(width: 13, height: 13)
+                                        .routineDarkIconMaterial(tint: selectedColor)
                                     Text("Add Phase")
-                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                        .font(.system(size: 14, weight: .black, design: .rounded))
+                                        .routineDarkIconMaterial(tint: selectedColor)
                                 }
-                                .foregroundStyle(LColors.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: LSpacing.inputRadius))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: LSpacing.inputRadius)
-                                        .strokeBorder(selectedColor.opacity(0.3), lineWidth: 1)
-                                )
+                                .background {
+                                    BubblyCardMaterial(
+                                        tint: selectedColor,
+                                        cornerRadius: LSpacing.inputRadius
+                                    )
+                                }
                             }
                             .buttonStyle(.plain)
                         }
@@ -457,7 +494,8 @@ struct AddRoutineView: View {
             }
             .navigationTitle(isEditing ? "Edit Routine" : "New Routine")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(theme.palette.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .keyboard) {
                     Button("Done") {
@@ -559,23 +597,152 @@ struct AddRoutineView: View {
     }
     
     // MARK: - Field
+
+    private var principlesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionLabel("Principles")
+
+            HStack(spacing: 12) {
+                TextField("e.g. Progress over perfection", text: $newPrinciple)
+                    .font(.system(size: 14, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+                    .submitLabel(.done)
+                    .onSubmit(addPrinciple)
+
+                Button(action: addPrinciple) {
+                    Image("addwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .foregroundStyle(selectedColor)
+                        .bubblyIconMaterial(tint: selectedColor)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(14)
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                    .strokeBorder(selectedColor, lineWidth: 1)
+            }
+
+            ForEach(principles.indices, id: \.self) { index in
+                HStack(spacing: 10) {
+                    Text("\(index + 1).")
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .foregroundStyle(.black)
+                        .routineDarkIconMaterial(tint: selectedColor)
+
+                    Text(principles[index])
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.black)
+                        .routineDarkIconMaterial(tint: selectedColor)
+
+                    Spacer(minLength: 8)
+
+                    Button {
+                        principles.remove(at: index)
+                    } label: {
+                        Image("trash")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 15, height: 15)
+                            .routineDarkIconMaterial(tint: selectedColor)
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background {
+                    BubblyCardMaterial(
+                        tint: selectedColor,
+                        cornerRadius: LSpacing.inputRadius
+                    )
+                }
+            }
+        }
+    }
+
+    private func addPrinciple() {
+        let trimmed = newPrinciple.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        principles.append(trimmed)
+        newPrinciple = ""
+    }
+
+    private func sectionLabel(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .foregroundStyle(theme.palette.textSecondary)
+    }
+
+    private func routineToggleRow(
+        title: String,
+        subtitle: String,
+        isOn: Binding<Bool>,
+        icon: String
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+
+                Text(subtitle)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            LureliaSlidingIconToggle(
+                isOn: isOn,
+                iconName: icon,
+                accentColor: selectedColor,
+                accessibilityLabel: title,
+                usesIconMaterial: true
+            )
+        }
+    }
+
+    private func routineToggleCard(
+        title: String,
+        subtitle: String,
+        isOn: Binding<Bool>,
+        icon: String
+    ) -> some View {
+        routineToggleRow(
+            title: title,
+            subtitle: subtitle,
+            isOn: isOn,
+            icon: icon
+        )
+        .padding(14)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                .strokeBorder(selectedColor, lineWidth: 1)
+        }
+    }
     
     private func field<Content: View>(
         _ label: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(label)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .foregroundStyle(LColors.textSecondary)
+            sectionLabel(label)
             content()
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius))
-                .overlay(
-                    RoundedRectangle(cornerRadius: LSpacing.cardRadius)
-                        .strokeBorder(LColors.glassBorder, lineWidth: 1.15)
-                )
+                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                        .strokeBorder(selectedColor, lineWidth: 1)
+                }
         }
     }
     
@@ -590,71 +757,16 @@ struct AddRoutineView: View {
         durationMode: Binding<Bool>,
         durationMinutesOverride: Binding<Int>
     ) -> some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 6) {
-                ForEach(lureliaWeekdays, id: \.value) { day in
-                    Button {
-                        if selectedDays.wrappedValue.contains(day.value) {
-                            selectedDays.wrappedValue.remove(day.value)
-                        } else {
-                            selectedDays.wrappedValue.insert(day.value)
-                        }
-                    } label: {
-                        Text(day.label)
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                selectedDays.wrappedValue.contains(day.value)
-                                ? selectedColorFillTextColor
-                                : LColors.textPrimary
-                            )
-                            .wcagContrastLift(
-                                on: selectedColor,
-                                isActive: selectedDays.wrappedValue.contains(day.value)
-                            )
-                            .frame(width: 34, height: 34)
-                            .background(
-                                selectedDays.wrappedValue.contains(day.value) ? selectedColor.opacity(0.5) : LColors.glassSurface,
-                                in: Circle()
-                            )
-                            .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
-                    }.buttonStyle(.plain)
-                }
-            }
-            
-            Divider().overlay(LColors.glassBorder)
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Start time").font(.system(size: 12, design: .rounded)).foregroundStyle(LColors.textSecondary)
-                LureliaGradientTimeDrumPicker(hour: startHour, minute: startMinute)
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("End time").font(.system(size: 12, design: .rounded)).foregroundStyle(LColors.textSecondary)
-                LureliaGradientTimeDrumPicker(hour: endHour, minute: endMinute)
-            }
-            
-            Divider().overlay(LColors.glassBorder)
-            
-            Toggle(isOn: durationMode) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Duration countdown")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
-                    Text("Count down from a set duration instead of end time")
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                }
-            }.tint(LColors.gradientBlue)
-            
-            if durationMode.wrappedValue {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Duration (minutes)").font(.system(size: 12, design: .rounded)).foregroundStyle(LColors.textSecondary)
-                    TextField("e.g. 45", value: durationMinutesOverride, format: .number)
-                        .keyboardType(.numberPad)
-                        .font(.system(size: 15, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
-                }
-            }
-        }
+        RoutineScheduleEditor(
+            selectedDays: selectedDays,
+            startHour: startHour,
+            startMinute: startMinute,
+            endHour: endHour,
+            endMinute: endMinute,
+            durationMode: durationMode,
+            durationMinutesOverride: durationMinutesOverride,
+            tintColor: selectedColor
+        )
     }
         
     // MARK: - Task List Content (reusable for routine-level and phase-level)
@@ -674,75 +786,34 @@ struct AddRoutineView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 10, height: 10)
-                        .foregroundStyle(.white)
+                        .frame(width: 13, height: 13)
+                        .routineDarkIconMaterial(tint: selectedColor)
 
                     Text("Add Task")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .routineDarkIconMaterial(tint: selectedColor)
                 }
-                .foregroundStyle(LColors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(
-                    LColors.glassSurface,
-                    in: RoundedRectangle(cornerRadius: LSpacing.inputRadius)
-                )
+                .background {
+                    BubblyCardMaterial(
+                        tint: selectedColor,
+                        cornerRadius: LSpacing.inputRadius
+                    )
+                }
             }
             .buttonStyle(.plain)
 
             if !tasks.wrappedValue.isEmpty {
-                Divider().overlay(LColors.glassBorder)
-
                 VStack(spacing: 10) {
                     ForEach(Array(tasks.wrappedValue.enumerated()), id: \.element.id) { index, taskDraft in
-                        HStack(spacing: 10) {
-                            Button {
-                                onEdit(index)
-                            } label: {
-                                Image("settings")
-                                    .renderingMode(.template)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 13, height: 13)
-                                    .foregroundStyle(LColors.textSecondary.opacity(0.55))
-                            }
-                            .buttonStyle(.plain)
-
-                            LureliaIconView(iconId: taskDraft.icon, size: 16)
-                                .foregroundStyle(selectedColor)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(taskDraft.name)
-                                    .font(.system(size: 14, design: .rounded))
-                                    .foregroundStyle(LColors.textPrimary)
-
-                                if !taskDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text(taskDraft.notes)
-                                        .font(.system(size: 11, design: .rounded))
-                                        .foregroundStyle(LColors.textSecondary.opacity(0.75))
-                                        .lineLimit(2)
-                                }
-                            }
-
-                            Spacer()
-
-                            Button {
+                        routineTaskMaterialRow(
+                            taskDraft: taskDraft,
+                            onEdit: { onEdit(index) },
+                            onDelete: {
                                 tasks.wrappedValue.remove(at: index)
-                            } label: {
-                                Image("trash")
-                                    .renderingMode(.template)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 13, height: 13)
-                                    .foregroundStyle(LColors.gradientCyan)
                             }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.vertical, 4)
-
-                        if index < tasks.wrappedValue.count - 1 {
-                            Divider().overlay(LColors.glassBorder)
-                        }
+                        )
                     }
                 }
             }
@@ -763,85 +834,101 @@ struct AddRoutineView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 10, height: 10)
-                        .foregroundStyle(.white)
+                        .frame(width: 13, height: 13)
+                        .routineDarkIconMaterial(tint: selectedColor)
 
                     Text("Add Task")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .routineDarkIconMaterial(tint: selectedColor)
                 }
-                .foregroundStyle(LColors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(
-                    LColors.glassSurface,
-                    in: RoundedRectangle(cornerRadius: LSpacing.inputRadius)
-                )
+                .background {
+                    BubblyCardMaterial(
+                        tint: selectedColor,
+                        cornerRadius: LSpacing.inputRadius
+                    )
+                }
             }
             .buttonStyle(.plain)
 
             if phaseIndex < phaseDrafts.count,
                !phaseDrafts[phaseIndex].tasks.isEmpty {
-
-                Divider().overlay(LColors.glassBorder)
-
                 VStack(spacing: 10) {
                     ForEach(phaseDrafts[phaseIndex].tasks.indices, id: \.self) { taskIndex in
                         let taskDraft = phaseDrafts[phaseIndex].tasks[taskIndex]
 
-                        HStack(spacing: 10) {
-                            Button {
+                        routineTaskMaterialRow(
+                            taskDraft: taskDraft,
+                            onEdit: {
                                 phaseTaskSheetTarget = PhaseTaskSheetTarget(
                                     phaseIndex: phaseIndex,
                                     mode: .edit(taskIndex: taskIndex)
                                 )
-                            } label: {
-                                Image("settings")
-                                    .renderingMode(.template)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 13, height: 13)
-                                    .foregroundStyle(LColors.textSecondary.opacity(0.55))
-                            }
-                            .buttonStyle(.plain)
-
-                            LureliaIconView(iconId: taskDraft.icon, size: 16)
-                                .foregroundStyle(selectedColor)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(taskDraft.name)
-                                    .font(.system(size: 14, design: .rounded))
-                                    .foregroundStyle(LColors.textPrimary)
-
-                                if !taskDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    Text(taskDraft.notes)
-                                        .font(.system(size: 11, design: .rounded))
-                                        .foregroundStyle(LColors.textSecondary.opacity(0.75))
-                                        .lineLimit(2)
-                                }
-                            }
-
-                            Spacer()
-
-                            Button {
+                            },
+                            onDelete: {
                                 phaseDrafts[phaseIndex].tasks.remove(at: taskIndex)
-                            } label: {
-                                Image("trash")
-                                    .renderingMode(.template)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 13, height: 13)
-                                    .foregroundStyle(LColors.gradientCyan)
                             }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.vertical, 4)
-
-                        if taskIndex < phaseDrafts[phaseIndex].tasks.count - 1 {
-                            Divider().overlay(LColors.glassBorder)
-                        }
+                        )
                     }
                 }
             }
+        }
+    }
+
+    private func routineTaskMaterialRow(
+        taskDraft: LureliaRoutineTaskDraft,
+        onEdit: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 7) {
+            Button(action: onEdit) {
+                Image("settings")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 15, height: 15)
+                    .routineDarkIconMaterial(tint: selectedColor)
+            }
+            .buttonStyle(.plain)
+
+            LureliaIconView(iconId: taskDraft.icon, size: 18)
+                .routineDarkIconMaterial(tint: selectedColor)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(taskDraft.name)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .routineDarkIconMaterial(tint: selectedColor)
+
+                if !taskDraft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(taskDraft.notes)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .routineDarkIconMaterial(tint: selectedColor)
+                        .opacity(0.76)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            Button(action: onDelete) {
+                Image("trash")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 15, height: 15)
+                    .routineDarkIconMaterial(tint: selectedColor)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background {
+            BubblyCardMaterial(
+                tint: selectedColor,
+                cornerRadius: LSpacing.inputRadius
+            )
         }
     }
     
@@ -869,13 +956,19 @@ struct AddRoutineView: View {
     private func reminderPreviewRow(title: String, time: String) -> some View {
         HStack(spacing: 8) {
             Image("bellfill").renderingMode(.template).resizable().scaledToFit()
-                .frame(width: 12, height: 12).foregroundStyle(selectedColor)
-            Text(title).font(.system(size: 12, weight: .black, design: .rounded)).foregroundStyle(LColors.textPrimary)
+                .frame(width: 16, height: 16)
+                .foregroundStyle(selectedColor)
+                .bubblyIconMaterial(tint: selectedColor)
+            Text(title).font(.system(size: 12, weight: .black, design: .rounded)).foregroundStyle(theme.palette.textPrimary)
             Spacer()
-            Text(time).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(LColors.textSecondary)
+            Text(time).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(theme.palette.textSecondary)
         }
         .padding(.horizontal, 10).padding(.vertical, 8)
-        .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(selectedColor, lineWidth: 1)
+        }
     }
     
     // MARK: - Populate
@@ -886,7 +979,6 @@ struct AddRoutineView: View {
         name = routine.name
         selectedIcon = routine.icon
         timeOfDay = routine.timeOfDay
-        selectedColor = Color(lureliaHex: routine.colorHex)
         purpose = routine.purpose
         descriptionText = routine.descriptionText
         principles = routine.principles
@@ -1245,27 +1337,244 @@ struct AddRoutineView: View {
     }
 }
 
+struct RoutineColorSelectionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
+
+    @State private var selectedColor: Color
+
+    let onContinue: (Color) -> Void
+
+    init(
+        initialColor: Color,
+        onContinue: @escaping (Color) -> Void
+    ) {
+        _selectedColor = State(initialValue: initialColor)
+        self.onContinue = onContinue
+    }
+
+    var body: some View {
+        ZStack {
+            theme.palette.background
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Choose Routine Color")
+                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+
+                    Text("Pick the color that will carry through this routine.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(theme.palette.textSecondary)
+                }
+
+                ColorPicker(
+                    selection: $selectedColor,
+                    supportsOpacity: false
+                ) {
+                    Text("Routine Color")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 58)
+                .background(
+                    theme.palette.surface,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(selectedColor, lineWidth: 1)
+                }
+
+                Button {
+                    onContinue(selectedColor)
+                    dismiss()
+                } label: {
+                    Text("Continue")
+                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background {
+                            BubblyCardMaterial(
+                                tint: selectedColor,
+                                cornerRadius: 16
+                            )
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+        }
+        .presentationDetents([.height(270)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(theme.palette.background)
+    }
+}
+
 private enum RoutineReminderSyncResult {
     case schedule(LureliaReminder)
     case cancel(LureliaReminder)
     case none
 }
 
+private struct RoutineScheduleEditor: View {
+    @Environment(\.appTheme) private var theme
+
+    @Binding var selectedDays: Set<Int>
+    @Binding var startHour: Int
+    @Binding var startMinute: Int
+    @Binding var endHour: Int
+    @Binding var endMinute: Int
+    @Binding var durationMode: Bool
+    @Binding var durationMinutesOverride: Int
+
+    let tintColor: Color
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 6) {
+                ForEach(lureliaWeekdays, id: \.value) { day in
+                    weekdayButton(day)
+                }
+            }
+
+            timePicker(
+                title: "Start time",
+                hour: $startHour,
+                minute: $startMinute
+            )
+
+            timePicker(
+                title: "End time",
+                hour: $endHour,
+                minute: $endMinute
+            )
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Duration countdown")
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
+
+                        Text("Count down from a set duration instead of end time")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(theme.palette.textSecondary)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    LureliaSlidingIconToggle(
+                        isOn: $durationMode,
+                        iconName: "clockwavy",
+                        accentColor: tintColor,
+                        accessibilityLabel: "Duration countdown",
+                        usesIconMaterial: true
+                    )
+                }
+
+                if durationMode {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Duration (minutes)")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundStyle(theme.palette.textSecondary)
+
+                        TextField("e.g. 45", value: $durationMinutesOverride, format: .number)
+                            .keyboardType(.numberPad)
+                            .font(.system(size: 15, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
+                            .padding(12)
+                            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(tintColor, lineWidth: 1)
+                            }
+                    }
+                }
+            }
+            .padding(14)
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                    .strokeBorder(tintColor, lineWidth: 1)
+            }
+        }
+    }
+
+    private func weekdayButton(_ day: (label: String, value: Int)) -> some View {
+        let isSelected = selectedDays.contains(day.value)
+
+        return Button {
+            if isSelected {
+                selectedDays.remove(day.value)
+            } else {
+                selectedDays.insert(day.value)
+            }
+        } label: {
+            Text(day.label)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(isSelected ? Color.black : theme.palette.textPrimary)
+                .routineDarkIconMaterial(
+                    tint: tintColor,
+                    isEnabled: isSelected
+                )
+                .frame(width: 38, height: 38)
+                .background {
+                    if isSelected {
+                        BubblyIconMaterial(tint: tintColor)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(theme.palette.surface)
+                    }
+                }
+                .overlay {
+                    Circle()
+                        .strokeBorder(
+                            isSelected ? tintColor : theme.palette.textPrimary.opacity(0.12),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func timePicker(
+        title: String,
+        hour: Binding<Int>,
+        minute: Binding<Int>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.palette.textSecondary)
+
+            LureliaGradientTimeDrumPicker(
+                hour: hour,
+                minute: minute,
+                tint: tintColor
+            )
+        }
+    }
+}
+
 // MARK: - Phase Schedule Sheet
 
 struct PhaseScheduleSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @Binding var draft: LureliaRoutinePhaseDraft
     let tintColor: Color
-
-    private var tintFillTextColor: Color {
-        tintColor.wcagContrastingSolidTextColor
-    }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
@@ -1274,85 +1583,20 @@ struct PhaseScheduleSheet: View {
                                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                                 .foregroundStyle(LColors.textSecondary)
                             
-                            VStack(spacing: 14) {
-                                Toggle(isOn: $draft.scheduleEnabled) {
-                                    Text("Enable schedule")
-                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                        .foregroundStyle(LColors.textPrimary)
-                                }.tint(LColors.gradientBlue)
-                                
-                                if draft.scheduleEnabled {
-                                    HStack(spacing: 6) {
-                                        ForEach(lureliaWeekdays, id: \.value) { day in
-                                            Button {
-                                                if draft.scheduledDays.contains(day.value) {
-                                                    draft.scheduledDays.remove(day.value)
-                                                } else {
-                                                    draft.scheduledDays.insert(day.value)
-                                                }
-                                            } label: {
-                                                Text(day.label)
-                                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                                    .foregroundStyle(
-                                                        draft.scheduledDays.contains(day.value)
-                                                        ? tintFillTextColor
-                                                        : LColors.textPrimary
-                                                    )
-                                                    .wcagContrastLift(
-                                                        on: tintColor,
-                                                        isActive: draft.scheduledDays.contains(day.value)
-                                                    )
-                                                    .frame(width: 34, height: 34)
-                                                    .background(
-                                                        draft.scheduledDays.contains(day.value) ? tintColor.opacity(0.5) : LColors.glassSurface,
-                                                        in: Circle()
-                                                    )
-                                                    .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
-                                            }.buttonStyle(.plain)
-                                        }
-                                    }
-                                    
-                                    Divider().overlay(LColors.glassBorder)
-                                    
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Start time").font(.system(size: 12, design: .rounded)).foregroundStyle(LColors.textSecondary)
-                                        LureliaGradientTimeDrumPicker(hour: $draft.startHour, minute: $draft.startMinute)
-                                    }
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("End time").font(.system(size: 12, design: .rounded)).foregroundStyle(LColors.textSecondary)
-                                        LureliaGradientTimeDrumPicker(hour: $draft.endHour, minute: $draft.endMinute)
-                                    }
-                                    
-                                    Divider().overlay(LColors.glassBorder)
-                                    
-                                    Toggle(isOn: $draft.durationMode) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text("Duration countdown")
-                                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                                .foregroundStyle(LColors.textPrimary)
-                                            Text("Count down from a set duration instead of end time")
-                                                .font(.system(size: 11, design: .rounded))
-                                                .foregroundStyle(LColors.textSecondary)
-                                        }
-                                    }.tint(LColors.gradientBlue)
-                                    
-                                    if draft.durationMode {
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            Text("Duration (minutes)").font(.system(size: 12, design: .rounded)).foregroundStyle(LColors.textSecondary)
-                                            TextField("e.g. 45", value: $draft.durationMinutesOverride, format: .number)
-                                                .keyboardType(.numberPad)
-                                                .font(.system(size: 15, design: .rounded))
-                                                .foregroundStyle(LColors.textPrimary)
-                                        }
-                                    }
-                                }
+                            enableScheduleCard
+
+                            if draft.scheduleEnabled {
+                                RoutineScheduleEditor(
+                                    selectedDays: $draft.scheduledDays,
+                                    startHour: $draft.startHour,
+                                    startMinute: $draft.startMinute,
+                                    endHour: $draft.endHour,
+                                    endMinute: $draft.endMinute,
+                                    durationMode: $draft.durationMode,
+                                    durationMinutesOverride: $draft.durationMinutesOverride,
+                                    tintColor: tintColor
+                                )
                             }
-                            .padding(14)
-                            .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: LSpacing.cardRadius)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1.15)
-                            )
                         }
                     }
                     .padding(.horizontal).padding(.top, 16).padding(.bottom, 40)
@@ -1362,12 +1606,43 @@ struct PhaseScheduleSheet: View {
             }
             .navigationTitle("Phase Schedule")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbarBackground(theme.palette.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.foregroundStyle(LColors.textPrimary)
+                    Button("Done") { dismiss() }.foregroundStyle(theme.palette.textPrimary)
                 }
             }
+        }
+    }
+
+    private var enableScheduleCard: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Enable schedule")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+
+                Text("Choose when this phase is scheduled")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            }
+
+            Spacer(minLength: 8)
+
+            LureliaSlidingIconToggle(
+                isOn: $draft.scheduleEnabled,
+                iconName: "ringstarcal",
+                accentColor: tintColor,
+                accessibilityLabel: "Enable schedule",
+                usesIconMaterial: true
+            )
+        }
+        .padding(14)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                .strokeBorder(tintColor, lineWidth: 1)
         }
     }
 }
@@ -1376,6 +1651,7 @@ struct PhaseScheduleSheet: View {
 
 struct AddCustomRoutineTaskView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
 
     let onSave: (LureliaRoutineTaskDraft) -> Void
     let tint: Color
@@ -1423,7 +1699,7 @@ struct AddCustomRoutineTaskView: View {
 
     init(
         initialDraft: LureliaRoutineTaskDraft = LureliaRoutineTaskDraft(name: ""),
-        tint: Color = LColors.gradientPurple,
+        tint: Color,
         onSave: @escaping (LureliaRoutineTaskDraft) -> Void
     ) {
         self.onSave = onSave
@@ -1470,7 +1746,7 @@ struct AddCustomRoutineTaskView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
                     .routineDismissKeyboardOnTap()
 
@@ -1519,16 +1795,13 @@ struct AddCustomRoutineTaskView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .keyboard) {
-                    Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.foregroundStyle(LColors.textPrimary) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.foregroundStyle(theme.palette.textPrimary) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isEditing ? "Save" : "Add") { commit() }
-                        .fontWeight(.semibold).foregroundStyle(LColors.textPrimary).disabled(!canAdd)
+                        .fontWeight(.semibold).foregroundStyle(theme.palette.textPrimary).disabled(!canAdd)
                 }
             }
+            .tint(tint)
         }
     }
 

@@ -55,12 +55,17 @@ struct LureliaBackground: View {
 // MARK: - Gradient Stepper
 
 struct LureliaGradientStepper: View {
+    @Environment(\.appTheme) private var theme
+
     let title: String
     let subtitle: String?
     @Binding var value: Int
     var range: ClosedRange<Int> = 1...999
     var step: Int = 1
     var tint: Color?
+    var usesRoutineMaterialStyle: Bool = false
+    var showsContainer: Bool = true
+    var usesTintedMaterialButtons: Bool = false
 
     private var canDecrease: Bool {
         value - step >= range.lowerBound
@@ -77,13 +82,17 @@ struct LureliaGradientStepper: View {
                     if !title.isEmpty {
                         Text(title)
                             .font(.system(size: 14, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(usesRoutineMaterialStyle ? theme.palette.textPrimary : .white)
                     }
 
                     if let subtitle {
                         Text(subtitle)
                             .font(.system(size: title.isEmpty ? 15 : 11, weight: .black, design: .rounded))
-                            .foregroundStyle(title.isEmpty ? .white.opacity(0.78) : .white.opacity(0.5))
+                            .foregroundStyle(
+                                usesRoutineMaterialStyle
+                                    ? theme.palette.textSecondary
+                                    : (title.isEmpty ? .white.opacity(0.78) : .white.opacity(0.5))
+                            )
                     }
                 }
             }
@@ -96,7 +105,7 @@ struct LureliaGradientStepper: View {
 
             Text("\(value)")
                 .font(.system(size: 18, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(usesRoutineMaterialStyle ? theme.palette.textPrimary : .white)
                 .monospacedDigit()
                 .frame(minWidth: 38)
 
@@ -107,7 +116,16 @@ struct LureliaGradientStepper: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .background {
-            LureliaNeutralGlassSurface(cornerRadius: 16, prominence: .lens)
+            if showsContainer && usesRoutineMaterialStyle {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(theme.palette.surface)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(tint ?? theme.palette.primaryAction, lineWidth: 1)
+                    }
+            } else if showsContainer {
+                LureliaNeutralGlassSurface(cornerRadius: 16, prominence: .lens)
+            }
         }
     }
 
@@ -120,6 +138,8 @@ struct LureliaGradientStepper: View {
             icon: icon,
             isEnabled: isEnabled,
             tint: tint,
+            usesRoutineMaterialStyle: usesRoutineMaterialStyle,
+            usesTintedMaterialButtons: usesTintedMaterialButtons,
             action: action
         )
     }
@@ -128,11 +148,14 @@ struct LureliaGradientStepper: View {
 // MARK: - Sliding Icon Toggle
 
 struct LureliaSlidingIconToggle: View {
+    @Environment(\.appTheme) private var theme
+
     @Binding var isOn: Bool
     let iconName: String
     var accentColor: Color
     var accessibilityLabel: String
     var isDisabled: Bool = false
+    var usesIconMaterial: Bool = false
     var width: CGFloat = 58
     var height: CGFloat = 32
 
@@ -156,12 +179,16 @@ struct LureliaSlidingIconToggle: View {
                     if isOn { Spacer(minLength: 0) }
 
                     ZStack {
+                        if isOn && usesIconMaterial {
+                            BubblyIconMaterial(tint: accentColor)
+                                .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(knobFill)
+                        }
+
                         Circle()
-                            .fill(knobFill)
-                            .overlay {
-                                Circle()
-                                    .strokeBorder(knobStroke, lineWidth: 1)
-                            }
+                            .strokeBorder(knobStroke, lineWidth: 1)
 
                         Image(iconName)
                             .renderingMode(.template)
@@ -199,7 +226,7 @@ struct LureliaSlidingIconToggle: View {
     }
 
     private var knobFill: Color {
-        isOn ? accentColor : LColors.glassSurface2
+        isOn ? accentColor : theme.palette.raisedSurface
     }
 
     private var knobStroke: Color {
@@ -207,7 +234,11 @@ struct LureliaSlidingIconToggle: View {
     }
 
     private var knobIconColor: Color {
-        isOn ? accentColor.wcagContrastingSolidTextColor : .white.opacity(0.62)
+        if isOn && usesIconMaterial {
+            return .black
+        }
+
+        return isOn ? accentColor.wcagContrastingSolidTextColor : theme.palette.textSecondary
     }
 
     private func toggle() {
@@ -222,11 +253,17 @@ private struct LureliaRepeatingStepperButton: View {
     let icon: String
     let isEnabled: Bool
     let tint: Color?
+    let usesRoutineMaterialStyle: Bool
+    let usesTintedMaterialButtons: Bool
     let action: () -> Void
 
     @State private var repeatTask: Task<Void, Never>?
 
     private var activeStyle: AnyShapeStyle {
+        if usesTintedMaterialButtons {
+            return AnyShapeStyle(Color.black)
+        }
+
         if let tint {
             return AnyShapeStyle(tint)
         }
@@ -260,24 +297,34 @@ private struct LureliaRepeatingStepperButton: View {
             .resizable()
             .scaledToFit()
             .foregroundStyle(isEnabled ? activeStyle : inactiveStyle)
+            .bubblyIconMaterial(
+                tint: usesTintedMaterialButtons ? (tint ?? LColors.gradientPurple) : (tint ?? LColors.gradientPurple),
+                isEnabled: usesRoutineMaterialStyle || usesTintedMaterialButtons
+            )
             .opacity(isEnabled ? 1 : 0.28)
             .frame(width: 22, height: 22)
             .frame(width: 38, height: 38)
             .background {
-                if tint == nil {
+                if usesRoutineMaterialStyle {
+                    Circle()
+                        .fill(Color.black.opacity(0.72))
+                } else if !usesTintedMaterialButtons && tint == nil {
                     LureliaNeutralGlassCircle(prominence: isEnabled ? .active : .lens)
-                } else {
+                } else if !usesTintedMaterialButtons && tint != nil {
                     Circle()
                         .fill(activeBackground)
                 }
             }
             .overlay {
-                if tint != nil {
+                if usesRoutineMaterialStyle, let tint {
+                    Circle()
+                        .strokeBorder(tint.opacity(isEnabled ? 0.88 : 0.32), lineWidth: 1)
+                } else if !usesTintedMaterialButtons && tint != nil {
                     Circle()
                         .strokeBorder(activeBorderStyle, lineWidth: 1)
                 }
             }
-            .contentShape(Circle())
+            .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
@@ -480,6 +527,7 @@ struct GlassCard<Content: View>: View {
     var cornerRadius: CGFloat = 24
     var padding: CGFloat = LSpacing.cardPadding
     var tint: Color?
+    var borderColor: Color? = nil
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -529,6 +577,12 @@ struct GlassCard<Content: View>: View {
                 }
         } else {
             LureliaNeutralGlassSurface(cornerRadius: cornerRadius)
+                .overlay {
+                    if let borderColor {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .strokeBorder(borderColor.opacity(0.55), lineWidth: 1)
+                    }
+                }
         }
     }
 }
@@ -547,11 +601,33 @@ struct LureliaBackgroundAlt: View {
 struct LureliaGradientTimeDrumPicker: View {
     @Binding var hour: Int
     @Binding var minute: Int
+    var tint: Color? = nil
+    var usesDarkTypography: Bool = false
+
+    private let isCompact: Bool
     
     @State private var displayHour: Int = 9
     @State private var meridiem: String = "AM"
     
     private let meridiems = ["AM", "PM"]
+
+    init(
+        hour: Binding<Int>,
+        minute: Binding<Int>,
+        tint: Color? = nil,
+        usesDarkTypography: Bool = false,
+        isCompact: Bool = false
+    ) {
+        _hour = hour
+        _minute = minute
+        self.tint = tint
+        self.usesDarkTypography = usesDarkTypography
+        self.isCompact = isCompact
+    }
+
+    private var pickerTextColor: Color {
+        usesDarkTypography ? .black : LColors.textPrimary
+    }
     
     private var formattedPreview: String {
         String(format: "%d:%02d %@", displayHour, minute, meridiem)
@@ -590,72 +666,81 @@ struct LureliaGradientTimeDrumPicker: View {
     }
     
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(LGradients.header)
+        VStack(spacing: isCompact ? 8 : 12) {
+            HStack(spacing: isCompact ? 6 : 8) {
+                timePreviewIcon
                 
                 Text(formattedPreview)
-                    .font(.system(size: 18, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .font(.system(size: isCompact ? 12 : 18, weight: .black, design: .rounded))
+                    .foregroundStyle(pickerTextColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
                 
                 Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, isCompact ? 9 : 14)
+            .padding(.vertical, isCompact ? 7 : 10)
             .background {
-                LureliaNeutralGlassSurface(cornerRadius: 16, prominence: .lens)
+                pickerSurface(cornerRadius: isCompact ? 12 : 16, prominence: .lens)
             }
             
             ZStack {
-                LureliaNeutralGlassSurface(cornerRadius: 24)
+                pickerSurface(cornerRadius: isCompact ? 16 : 24)
                 
                 VStack(spacing: 0) {
                     Spacer()
                     
-                    LureliaNeutralGlassSurface(cornerRadius: 12, prominence: .active)
-                        .frame(height: 38)
+                    pickerSelectionSurface(cornerRadius: isCompact ? 9 : 12)
+                        .frame(height: isCompact ? 30 : 38)
                     
                     Spacer()
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, isCompact ? 5 : 12)
                 
-                HStack(spacing: 6) {
+                HStack(spacing: isCompact ? 1 : 6) {
                     LureliaDrumPickerColumn(
                         values: Array(1...12),
                         labels: Array(1...12).map { "\($0)" },
-                        selection: displayHourBinding
+                        selection: displayHourBinding,
+                        textColor: pickerTextColor,
+                        itemHeight: isCompact ? 30 : 38,
+                        textSize: isCompact ? 15 : 20
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
+                    .frame(height: isCompact ? 90 : 120)
                     .clipped()
 
                     Text(":")
-                        .font(.system(size: 24, weight: .black, design: .rounded))
-                        .foregroundStyle(LGradients.header)
+                        .font(.system(size: isCompact ? 17 : 24, weight: .black, design: .rounded))
+                        .foregroundStyle(pickerTextColor)
 
                     LureliaDrumPickerColumn(
                         values: Array(0..<60),
                         labels: Array(0..<60).map { String(format: "%02d", $0) },
-                        selection: minuteBinding
+                        selection: minuteBinding,
+                        textColor: pickerTextColor,
+                        itemHeight: isCompact ? 30 : 38,
+                        textSize: isCompact ? 15 : 20
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
+                    .frame(height: isCompact ? 90 : 120)
                     .clipped()
 
                     LureliaDrumPickerColumn(
                         values: meridiems,
                         labels: meridiems,
-                        selection: meridiemBinding
+                        selection: meridiemBinding,
+                        textColor: pickerTextColor,
+                        itemHeight: isCompact ? 30 : 38,
+                        textSize: isCompact ? 14 : 20
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
+                    .frame(height: isCompact ? 90 : 120)
                     .clipped()
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, isCompact ? 3 : 8)
             }
-            .frame(height: 138)
+            .frame(height: isCompact ? 104 : 138)
         }
         .onAppear {
             syncDisplayValuesFromStoredHour()
@@ -668,6 +753,61 @@ struct LureliaGradientTimeDrumPicker: View {
         }
         .onChange(of: hour) { _, _ in
             syncDisplayValuesFromStoredHour()
+        }
+    }
+
+    @ViewBuilder
+    private var timePreviewIcon: some View {
+        if let tint {
+            Image("clockwavy")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: isCompact ? 10 : 13, height: isCompact ? 10 : 13)
+                .foregroundStyle(usesDarkTypography ? Color.black : tint)
+                .bubblyIconMaterial(tint: usesDarkTypography ? .black : tint)
+        } else {
+            Image("clockwavy")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: isCompact ? 10 : 13, height: isCompact ? 10 : 13)
+                .foregroundStyle(LGradients.header)
+        }
+    }
+
+    @ViewBuilder
+    private func pickerSurface(
+        cornerRadius: CGFloat,
+        prominence: LureliaNeutralGlassProminence = .surface
+    ) -> some View {
+        if let tint {
+            BubblyCardMaterial(
+                tint: tint,
+                cornerRadius: cornerRadius
+            )
+        } else {
+            LureliaNeutralGlassSurface(
+                cornerRadius: cornerRadius,
+                prominence: prominence
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func pickerSelectionSurface(cornerRadius: CGFloat) -> some View {
+        if let tint {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(usesDarkTypography ? Color.white.opacity(0.24) : Color.black.opacity(0.16))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(tint.opacity(0.78), lineWidth: 1)
+                }
+        } else {
+            LureliaNeutralGlassSurface(
+                cornerRadius: cornerRadius,
+                prominence: .active
+            )
         }
     }
     
@@ -709,17 +849,42 @@ struct LureliaGradientTimeDrumPicker: View {
     }
 }
 
+struct LureliaCompactTimeDrumPicker: View {
+    @Binding var hour: Int
+    @Binding var minute: Int
+    var tint: Color? = nil
+    var usesDarkTypography: Bool = false
+
+    var body: some View {
+        LureliaGradientTimeDrumPicker(
+            hour: $hour,
+            minute: $minute,
+            tint: tint,
+            usesDarkTypography: usesDarkTypography,
+            isCompact: true
+        )
+    }
+}
+
 // MARK: - Tinted Time Drum Picker (Routine Tint)
 
 struct LureliaTintedTimeDrumPicker: View {
+    @Environment(\.appTheme) private var theme
+
     @Binding var hour: Int
     @Binding var minute: Int
     let tint: Color
+    var usesCardMaterial: Bool = false
+    var usesDarkTypography: Bool = false
 
     @State private var displayHour: Int = 9
     @State private var meridiem: String = "AM"
 
     private let meridiems = ["AM", "PM"]
+
+    private var pickerTextColor: Color {
+        usesDarkTypography ? .black : theme.palette.textPrimary
+    }
 
     private var formattedPreview: String {
         String(format: "%d:%02d %@", displayHour, minute, meridiem)
@@ -762,42 +927,50 @@ struct LureliaTintedTimeDrumPicker: View {
             HStack(spacing: 8) {
                 Image(systemName: "clock.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(tint)
+                    .foregroundStyle(usesDarkTypography ? .black : tint)
 
                 Text(formattedPreview)
                     .font(.system(size: 18, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(pickerTextColor)
 
                 Spacer()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
-                LColors.glassSurface2,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
+            .background {
+                if usesCardMaterial {
+                    BubblyCardMaterial(tint: tint, cornerRadius: 16)
+                } else {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(LColors.glassSurface2)
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .strokeBorder(tint.opacity(0.45), lineWidth: 1)
             )
 
             ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(tint.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(LColors.glassBorder, lineWidth: 1)
-                    )
+                if usesCardMaterial {
+                    BubblyCardMaterial(tint: tint, cornerRadius: 24)
+                } else {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(LColors.glassSurface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(tint.opacity(0.08))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                        )
+                }
 
                 VStack(spacing: 0) {
                     Spacer()
 
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(tint.opacity(0.20))
+                        .fill(usesDarkTypography ? Color.white.opacity(0.24) : tint.opacity(0.20))
                         .frame(height: 38)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -812,7 +985,8 @@ struct LureliaTintedTimeDrumPicker: View {
                     LureliaDrumPickerColumn(
                         values: Array(1...12),
                         labels: Array(1...12).map { "\($0)" },
-                        selection: displayHourBinding
+                        selection: displayHourBinding,
+                        textColor: pickerTextColor
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 120)
@@ -820,12 +994,13 @@ struct LureliaTintedTimeDrumPicker: View {
 
                     Text(":")
                         .font(.system(size: 24, weight: .black, design: .rounded))
-                        .foregroundStyle(tint)
+                        .foregroundStyle(usesDarkTypography ? .black : tint)
 
                     LureliaDrumPickerColumn(
                         values: Array(0..<60),
                         labels: Array(0..<60).map { String(format: "%02d", $0) },
-                        selection: minuteBinding
+                        selection: minuteBinding,
+                        textColor: pickerTextColor
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 120)
@@ -834,7 +1009,8 @@ struct LureliaTintedTimeDrumPicker: View {
                     LureliaDrumPickerColumn(
                         values: meridiems,
                         labels: meridiems,
-                        selection: meridiemBinding
+                        selection: meridiemBinding,
+                        textColor: pickerTextColor
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 120)
@@ -902,8 +1078,9 @@ private struct LureliaDrumPickerColumn<Value: Hashable>: View {
     let values: [Value]
     let labels: [String]
     @Binding var selection: Value
-
-    private let itemHeight: CGFloat = 38
+    var textColor: Color = .white
+    var itemHeight: CGFloat = 38
+    var textSize: CGFloat = 20
 
     @State private var dragOffset: CGFloat = 0
     @State private var baseOffset: CGFloat = 0
@@ -933,9 +1110,11 @@ private struct LureliaDrumPickerColumn<Value: Hashable>: View {
                     let normalized = max(0, 1 - distanceFromCenter / (itemHeight * 1.5))
 
                     Text(labels.indices.contains(index) ? labels[index] : "")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.3 + 0.65 * normalized))
+                        .font(.system(size: textSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(textColor.opacity(0.3 + 0.65 * normalized))
                         .scaleEffect(0.85 + 0.2 * normalized)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
                         .frame(height: itemHeight)
                         .frame(maxWidth: .infinity)
                         .offset(y: offsetY)
@@ -1023,6 +1202,11 @@ extension View {
 /// `Date` are preserved — only year/month/day are edited.
 struct LureliaGradientDateDrumPicker: View {
     @Binding var date: Date
+    var tint: Color? = nil
+    var usesCardMaterial: Bool = false
+    var usesDarkTypography: Bool = false
+
+    private let isCompact: Bool
 
     @State private var year: Int
     @State private var month: Int
@@ -1038,8 +1222,18 @@ struct LureliaGradientDateDrumPicker: View {
     private static let referenceYear = Calendar.current.component(.year, from: Date())
     private let yearRange: [Int] = Array((referenceYear - 5)...(referenceYear + 20))
 
-    init(date: Binding<Date>) {
+    init(
+        date: Binding<Date>,
+        tint: Color? = nil,
+        usesCardMaterial: Bool = false,
+        usesDarkTypography: Bool = false,
+        isCompact: Bool = false
+    ) {
         self._date = date
+        self.tint = tint
+        self.usesCardMaterial = usesCardMaterial
+        self.usesDarkTypography = usesDarkTypography
+        self.isCompact = isCompact
         let comps = Calendar.current.dateComponents([.year, .month, .day], from: date.wrappedValue)
         _year = State(initialValue: comps.year ?? LureliaGradientDateDrumPicker.referenceYear)
         _month = State(initialValue: comps.month ?? 1)
@@ -1090,78 +1284,134 @@ struct LureliaGradientDateDrumPicker: View {
 
     private var formattedPreview: String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEE, MMM d, yyyy"
+        formatter.dateFormat = isCompact ? "MMM d, yyyy" : "EEE, MMM d, yyyy"
         return formatter.string(from: date)
     }
 
+    private var pickerTextColor: Color {
+        usesDarkTypography ? .black : LColors.textPrimary
+    }
+
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(LGradients.header)
+        VStack(spacing: isCompact ? 8 : 12) {
+            HStack(spacing: isCompact ? 6 : 8) {
+                Group {
+                    if let tint {
+                        Image("ringstarcal")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(usesDarkTypography ? Color.black : tint)
+                            .bubblyIconMaterial(tint: usesDarkTypography ? .black : tint)
+                    } else {
+                        Image(systemName: "calendar")
+                            .font(.system(size: isCompact ? 10 : 13, weight: .bold))
+                            .foregroundStyle(LGradients.header)
+                    }
+                }
+                .frame(
+                    width: isCompact ? 11 : 15,
+                    height: isCompact ? 11 : 15
+                )
 
                 Text(formattedPreview)
-                    .font(.system(size: 18, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .font(.system(size: isCompact ? 12 : 18, weight: .black, design: .rounded))
+                    .foregroundStyle(pickerTextColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
 
                 Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, isCompact ? 9 : 14)
+            .padding(.vertical, isCompact ? 7 : 10)
             .background {
-                LureliaNeutralGlassSurface(cornerRadius: 16, prominence: .lens)
+                pickerSurface(cornerRadius: isCompact ? 12 : 16, prominence: .lens)
             }
 
             ZStack {
-                LureliaNeutralGlassSurface(cornerRadius: 24)
+                pickerSurface(cornerRadius: isCompact ? 16 : 24)
 
                 VStack(spacing: 0) {
                     Spacer()
 
-                    LureliaNeutralGlassSurface(cornerRadius: 12, prominence: .active)
-                        .frame(height: 38)
+                    selectionSurface(cornerRadius: isCompact ? 9 : 12)
+                        .frame(height: isCompact ? 30 : 38)
 
                     Spacer()
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, isCompact ? 5 : 12)
 
-                HStack(spacing: 6) {
+                HStack(spacing: isCompact ? 1 : 6) {
                     LureliaDrumPickerColumn(
                         values: Array(1...12),
                         labels: monthShortLabels,
-                        selection: monthBinding
+                        selection: monthBinding,
+                        textColor: pickerTextColor,
+                        itemHeight: isCompact ? 30 : 38,
+                        textSize: isCompact ? 14 : 20
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
+                    .frame(height: isCompact ? 90 : 120)
                     .clipped()
 
                     LureliaDrumPickerColumn(
                         values: Array(1...daysInMonth),
                         labels: Array(1...daysInMonth).map { "\($0)" },
-                        selection: dayBinding
+                        selection: dayBinding,
+                        textColor: pickerTextColor,
+                        itemHeight: isCompact ? 30 : 38,
+                        textSize: isCompact ? 15 : 20
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
+                    .frame(height: isCompact ? 90 : 120)
                     .clipped()
 
                     LureliaDrumPickerColumn(
                         values: yearRange,
                         labels: yearRange.map { "\($0)" },
-                        selection: yearBinding
+                        selection: yearBinding,
+                        textColor: pickerTextColor,
+                        itemHeight: isCompact ? 30 : 38,
+                        textSize: isCompact ? 13 : 20
                     )
                     .frame(maxWidth: .infinity)
-                    .frame(height: 120)
+                    .frame(height: isCompact ? 90 : 120)
                     .clipped()
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, isCompact ? 3 : 8)
             }
-            .frame(height: 138)
+            .frame(height: isCompact ? 104 : 138)
         }
         .onChange(of: month) { _, _ in syncDateFromDrums() }
         .onChange(of: day) { _, _ in syncDateFromDrums() }
         .onChange(of: year) { _, _ in syncDateFromDrums() }
         .onChange(of: date) { _, newValue in syncDrumsFromDate(newValue) }
+    }
+
+    @ViewBuilder
+    private func pickerSurface(
+        cornerRadius: CGFloat,
+        prominence: LureliaNeutralGlassProminence = .surface
+    ) -> some View {
+        if usesCardMaterial, let tint {
+            BubblyCardMaterial(tint: tint, cornerRadius: cornerRadius)
+        } else {
+            LureliaNeutralGlassSurface(cornerRadius: cornerRadius, prominence: prominence)
+        }
+    }
+
+    @ViewBuilder
+    private func selectionSurface(cornerRadius: CGFloat) -> some View {
+        if let tint {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(usesDarkTypography ? Color.white.opacity(0.24) : tint.opacity(0.20))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(tint.opacity(0.72), lineWidth: 1)
+                }
+        } else {
+            LureliaNeutralGlassSurface(cornerRadius: cornerRadius, prominence: .active)
+        }
     }
 
     private func syncDateFromDrums() {
@@ -1187,6 +1437,23 @@ struct LureliaGradientDateDrumPicker: View {
     }
 }
 
+struct LureliaCompactDateDrumPicker: View {
+    @Binding var date: Date
+    var tint: Color? = nil
+    var usesCardMaterial: Bool = false
+    var usesDarkTypography: Bool = false
+
+    var body: some View {
+        LureliaGradientDateDrumPicker(
+            date: $date,
+            tint: tint,
+            usesCardMaterial: usesCardMaterial,
+            usesDarkTypography: usesDarkTypography,
+            isCompact: true
+        )
+    }
+}
+
 // MARK: - Tinted Date Drum Picker (Routine Tint)
 
 /// Three-drum (Month / Day / Year) date picker using a caller-provided tint.
@@ -1196,6 +1463,8 @@ struct LureliaTintedDateDrumPicker: View {
     let tint: Color
     let minimumDate: Date?
     let maximumDate: Date?
+    var usesCardMaterial: Bool = false
+    var usesDarkTypography: Bool = false
 
     @State private var year: Int
     @State private var month: Int
@@ -1214,12 +1483,16 @@ struct LureliaTintedDateDrumPicker: View {
         date: Binding<Date>,
         tint: Color,
         minimumDate: Date? = nil,
-        maximumDate: Date? = nil
+        maximumDate: Date? = nil,
+        usesCardMaterial: Bool = false,
+        usesDarkTypography: Bool = false
     ) {
         self._date = date
         self.tint = tint
         self.minimumDate = minimumDate
         self.maximumDate = maximumDate
+        self.usesCardMaterial = usesCardMaterial
+        self.usesDarkTypography = usesDarkTypography
 
         let clampedDate = LureliaTintedDateDrumPicker.clamped(
             date.wrappedValue,
@@ -1346,6 +1619,10 @@ struct LureliaTintedDateDrumPicker: View {
         return formatter.string(from: date)
     }
 
+    private var pickerTextColor: Color {
+        usesDarkTypography ? .black : LColors.textPrimary
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
@@ -1354,42 +1631,29 @@ struct LureliaTintedDateDrumPicker: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 13, height: 13)
-                    .foregroundStyle(tint)
+                    .foregroundStyle(usesDarkTypography ? Color.black : tint)
+                    .bubblyIconMaterial(tint: usesDarkTypography ? .black : tint)
 
                 Text(formattedPreview)
                     .font(.system(size: 18, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(pickerTextColor)
 
                 Spacer()
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
-                LColors.glassSurface2,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(tint.opacity(0.45), lineWidth: 1)
-            )
+            .background {
+                pickerSurface(cornerRadius: 16)
+            }
 
             ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(tint.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .strokeBorder(LColors.glassBorder, lineWidth: 1)
-                    )
+                pickerSurface(cornerRadius: 24)
 
                 VStack(spacing: 0) {
                     Spacer()
 
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(tint.opacity(0.20))
+                        .fill(usesDarkTypography ? Color.white.opacity(0.24) : tint.opacity(0.20))
                         .frame(height: 38)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1404,7 +1668,8 @@ struct LureliaTintedDateDrumPicker: View {
                     LureliaDrumPickerColumn(
                         values: monthValues,
                         labels: monthLabels,
-                        selection: monthBinding
+                        selection: monthBinding,
+                        textColor: pickerTextColor
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 120)
@@ -1413,7 +1678,8 @@ struct LureliaTintedDateDrumPicker: View {
                     LureliaDrumPickerColumn(
                         values: dayValues,
                         labels: dayValues.map { "\($0)" },
-                        selection: dayBinding
+                        selection: dayBinding,
+                        textColor: pickerTextColor
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 120)
@@ -1422,7 +1688,8 @@ struct LureliaTintedDateDrumPicker: View {
                     LureliaDrumPickerColumn(
                         values: yearRange,
                         labels: yearRange.map { "\($0)" },
-                        selection: yearBinding
+                        selection: yearBinding,
+                        textColor: pickerTextColor
                     )
                     .frame(maxWidth: .infinity)
                     .frame(height: 120)
@@ -1439,6 +1706,24 @@ struct LureliaTintedDateDrumPicker: View {
         .onChange(of: day) { _, _ in syncDateFromDrums() }
         .onChange(of: year) { _, _ in syncDateFromDrums() }
         .onChange(of: date) { _, newValue in syncDrumsFromDate(newValue) }
+    }
+
+    @ViewBuilder
+    private func pickerSurface(cornerRadius: CGFloat) -> some View {
+        if usesCardMaterial {
+            BubblyCardMaterial(tint: tint, cornerRadius: cornerRadius)
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(LColors.glassSurface)
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(tint.opacity(0.08))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                }
+        }
     }
 
     private func clampedYear(_ value: Int) -> Int {
@@ -1550,8 +1835,31 @@ struct LureliaGradientDropdown<Value: Hashable>: View {
     @Binding var selection: Value?
     var allowsClear: Bool = false
     var label: (Value) -> String
+    var tint: Color? = nil
+    var usesCardMaterial: Bool = false
+    var usesDarkTypography: Bool = false
+    var iconTint: Color? = nil
+    var maxVisibleOptions: Int? = nil
 
     @State private var isExpanded = false
+
+    private var textColor: Color {
+        usesDarkTypography ? .black : .white
+    }
+
+    private var placeholderColor: Color {
+        textColor.opacity(0.48)
+    }
+
+    private var resolvedIconTint: Color {
+        if let iconTint {
+            return iconTint
+        }
+        if usesDarkTypography {
+            return .black
+        }
+        return tint ?? .white
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -1563,23 +1871,18 @@ struct LureliaGradientDropdown<Value: Hashable>: View {
                 HStack(spacing: 10) {
                     Text(selection.map(label) ?? placeholder)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(selection == nil ? Color.white.opacity(0.45) : Color.white)
+                        .foregroundStyle(selection == nil ? placeholderColor : textColor)
                         .lineLimit(1)
 
                     Spacer(minLength: 8)
 
-                    Image("chevdown")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 14, height: 14)
-                        .foregroundStyle(LGradients.header)
+                    dropdownIcon("chevdown")
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background {
-                    LureliaNeutralGlassSurface(
+                    dropdownSurface(
                         cornerRadius: 14,
                         prominence: isExpanded ? .active : .lens
                     )
@@ -1589,19 +1892,32 @@ struct LureliaGradientDropdown<Value: Hashable>: View {
             .buttonStyle(.plain)
 
             if isExpanded {
-                VStack(spacing: 4) {
-                    if allowsClear && selection != nil {
-                        optionRow(nil, labelText: "Clear")
-                    }
-                    ForEach(Array(options.enumerated()), id: \.offset) { _, option in
-                        optionRow(option, labelText: label(option))
+                Group {
+                    if let maxVisibleOptions {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            optionsList
+                        }
+                        .frame(height: CGFloat(maxVisibleOptions) * 48 + 12)
+                    } else {
+                        optionsList
                     }
                 }
                 .padding(6)
                 .background {
-                    LureliaNeutralGlassSurface(cornerRadius: 14)
+                    dropdownSurface(cornerRadius: 14)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private var optionsList: some View {
+        VStack(spacing: 4) {
+            if allowsClear && selection != nil {
+                optionRow(nil, labelText: "Clear")
+            }
+            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                optionRow(option, labelText: label(option))
             }
         }
     }
@@ -1616,20 +1932,12 @@ struct LureliaGradientDropdown<Value: Hashable>: View {
             }
         } label: {
             HStack(spacing: 10) {
-                Image(isSelected ? "checkwavy" : "chevright")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(
-                        isSelected
-                        ? AnyShapeStyle(LGradients.header)
-                        : AnyShapeStyle(Color.white.opacity(0.35))
-                    )
+                dropdownIcon(isSelected ? "checkwavy" : "chevright")
+                    .opacity(isSelected ? 1 : 0.48)
 
                 Text(labelText)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(textColor)
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
@@ -1638,12 +1946,47 @@ struct LureliaGradientDropdown<Value: Hashable>: View {
             .padding(.vertical, 10)
             .background {
                 if isSelected {
-                    LureliaNeutralGlassSurface(cornerRadius: 10, prominence: .active)
+                    if usesCardMaterial, tint != nil {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.black.opacity(0.14))
+                    } else {
+                        LureliaNeutralGlassSurface(cornerRadius: 10, prominence: .active)
+                    }
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func dropdownSurface(
+        cornerRadius: CGFloat,
+        prominence: LureliaNeutralGlassProminence = .surface
+    ) -> some View {
+        if usesCardMaterial, let tint {
+            BubblyCardMaterial(tint: tint, cornerRadius: cornerRadius)
+        } else {
+            LureliaNeutralGlassSurface(cornerRadius: cornerRadius, prominence: prominence)
+        }
+    }
+
+    @ViewBuilder
+    private func dropdownIcon(_ name: String) -> some View {
+        let image = Image(name)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 14, height: 14)
+
+        if usesCardMaterial, tint != nil {
+            image
+                .foregroundStyle(resolvedIconTint)
+                .bubblyIconMaterial(tint: resolvedIconTint)
+        } else {
+            image
+                .foregroundStyle(LGradients.header)
+        }
     }
 }
 
@@ -1663,6 +2006,9 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
     var label: (Value) -> String
     /// Return `true` to include the option in the panel. Default: include all.
     var optionsFilter: (Value) -> Bool = { _ in true }
+    var tint: Color? = nil
+    var usesCardMaterial: Bool = false
+    var usesDarkTypography: Bool = false
 
     @State private var isExpanded = false
 
@@ -1687,6 +2033,14 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
         selectedOptions.isEmpty
     }
 
+    private var textColor: Color {
+        usesDarkTypography ? .black : .white
+    }
+
+    private var placeholderColor: Color {
+        textColor.opacity(0.48)
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             Button {
@@ -1697,23 +2051,18 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
                 HStack(spacing: 10) {
                     Text(triggerText)
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(triggerIsPlaceholder ? Color.white.opacity(0.45) : Color.white)
+                        .foregroundStyle(triggerIsPlaceholder ? placeholderColor : textColor)
                         .lineLimit(1)
 
                     Spacer(minLength: 8)
 
-                    Image("chevdown")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 14, height: 14)
-                        .foregroundStyle(LGradients.header)
+                    dropdownIcon("chevdown")
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background {
-                    LureliaNeutralGlassSurface(
+                    dropdownSurface(
                         cornerRadius: 14,
                         prominence: isExpanded ? .active : .lens
                     )
@@ -1727,7 +2076,7 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
                     if visibleOptions.isEmpty {
                         Text("No calendars available")
                             .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(textColor.opacity(0.55))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 10)
@@ -1739,7 +2088,7 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
                 }
                 .padding(6)
                 .background {
-                    LureliaNeutralGlassSurface(cornerRadius: 14)
+                    dropdownSurface(cornerRadius: 14)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -1759,20 +2108,12 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
             // than one in a row.
         } label: {
             HStack(spacing: 10) {
-                Image(isSelected ? "checkwavy" : "chevright")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .foregroundStyle(
-                        isSelected
-                        ? AnyShapeStyle(LGradients.header)
-                        : AnyShapeStyle(Color.white.opacity(0.35))
-                    )
+                dropdownIcon(isSelected ? "checkwavy" : "chevright")
+                    .opacity(isSelected ? 1 : 0.48)
 
                 Text(labelText)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(textColor)
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
@@ -1781,12 +2122,47 @@ struct LureliaGradientMultiSelectDropdown<Value: Hashable & Identifiable>: View 
             .padding(.vertical, 10)
             .background {
                 if isSelected {
-                    LureliaNeutralGlassSurface(cornerRadius: 10, prominence: .active)
+                    if usesCardMaterial, tint != nil {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color.black.opacity(0.14))
+                    } else {
+                        LureliaNeutralGlassSurface(cornerRadius: 10, prominence: .active)
+                    }
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func dropdownSurface(
+        cornerRadius: CGFloat,
+        prominence: LureliaNeutralGlassProminence = .surface
+    ) -> some View {
+        if usesCardMaterial, let tint {
+            BubblyCardMaterial(tint: tint, cornerRadius: cornerRadius)
+        } else {
+            LureliaNeutralGlassSurface(cornerRadius: cornerRadius, prominence: prominence)
+        }
+    }
+
+    @ViewBuilder
+    private func dropdownIcon(_ name: String) -> some View {
+        let image = Image(name)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 14, height: 14)
+
+        if usesCardMaterial, let tint {
+            image
+                .foregroundStyle(usesDarkTypography ? Color.black : tint)
+                .bubblyIconMaterial(tint: usesDarkTypography ? .black : tint)
+        } else {
+            image
+                .foregroundStyle(LGradients.header)
+        }
     }
 }
 

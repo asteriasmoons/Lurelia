@@ -1,0 +1,80 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/Lurelia/Theme/LureliaComponents.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "%lld",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 106
+        }
+      },
+      {
+        "comment": "",
+        "key": "On",
+        "location": {
+          "startingColumn": 36,
+          "startingLine": 215
+        }
+      },
+      {
+        "comment": "",
+        "key": "Off",
+        "location": {
+          "startingColumn": 43,
+          "startingLine": 215
+        }
+      },
+      {
+        "comment": "",
+        "key": "Decrease",
+        "location": {
+          "startingColumn": 55,
+          "startingLine": 338
+        }
+      },
+      {
+        "comment": "",
+        "key": "Increase",
+        "location": {
+          "startingColumn": 68,
+          "startingLine": 338
+        }
+      },
+      {
+        "comment": "",
+        "key": ":",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 713
+        }
+      },
+      {
+        "comment": "",
+        "key": ":",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 995
+        }
+      },
+      {
+        "comment": "",
+        "key": "No calendars available",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 2059
+        }
+      },
+      {
+        "comment": "",
+        "key": "Lurelia",
+        "location": {
+          "startingColumn": 1,
+          "startingLine": 2255
+        }
+      }
+    ]
+  },
+  "version": 1
+}

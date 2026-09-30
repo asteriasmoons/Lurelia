@@ -194,6 +194,7 @@ extension SharedEventsService {
         actorUserID: String,
         title: String? = nil,
         description: String? = nil,
+        colorHex: String? = nil,
         startDate: Date? = nil,
         endDate: Date? = nil,
         isAllDay: Bool? = nil,
@@ -204,6 +205,7 @@ extension SharedEventsService {
             let actorUserID: String
             let title: String?
             let description: String?
+            let colorHex: String?
             let startDate: Date?
             let endDate: Date?
             let isAllDay: Bool?
@@ -217,6 +219,7 @@ extension SharedEventsService {
                 actorUserID: actorUserID,
                 title: title,
                 description: description,
+                colorHex: colorHex,
                 startDate: startDate,
                 endDate: endDate,
                 isAllDay: isAllDay,

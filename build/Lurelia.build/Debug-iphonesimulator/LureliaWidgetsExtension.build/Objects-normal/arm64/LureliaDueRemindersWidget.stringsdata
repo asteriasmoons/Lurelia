@@ -1,0 +1,48 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/LureliaDueRemindersWidget.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Nothing due soon",
+        "location": {
+          "startingColumn": 14,
+          "startingLine": 364
+        }
+      },
+      {
+        "comment": "",
+        "key": "Reminders",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 351
+        }
+      },
+      {
+        "comment": "",
+        "key": "Now",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 357
+        }
+      },
+      {
+        "comment": "",
+        "key": "Due Reminders",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 502
+        }
+      },
+      {
+        "comment": "",
+        "key": "See reminders due now and coming up soon.",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 503
+        }
+      }
+    ]
+  },
+  "version": 1
+}

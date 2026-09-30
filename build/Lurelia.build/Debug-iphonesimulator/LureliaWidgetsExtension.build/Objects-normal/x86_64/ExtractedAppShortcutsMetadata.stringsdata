@@ -1,0 +1,54 @@
+{
+  "source" : "\/Users\/asteriasmoons\/Desktop\/Lurelia\/LureliaWidgets\/TimelineWidgetShortcuts.swift",
+  "tables" : {
+    "AppShortcuts" : [
+      {
+        "appShortcutMetadata" : [
+          {
+            "actionIdentifier" : "CompleteTimelineItemWidgetIntent",
+            "index" : 0,
+            "parameterDisplayRepresentations" : {
+
+            },
+            "parameterTypes" : {
+
+            },
+            "title" : "Complete Timeline Item"
+          }
+        ],
+        "key" : "Complete ${applicationName} Timeline item",
+        "location" : {
+          "startingColumn" : 0,
+          "startingLine" : 15
+        },
+        "values" : [
+          "Complete ${applicationName} Timeline item"
+        ]
+      },
+      {
+        "appShortcutMetadata" : [
+          {
+            "actionIdentifier" : "SkipTimelineItemWidgetIntent",
+            "index" : 1,
+            "parameterDisplayRepresentations" : {
+
+            },
+            "parameterTypes" : {
+
+            },
+            "title" : "Skip Timeline Item"
+          }
+        ],
+        "key" : "Skip ${applicationName} Timeline item",
+        "location" : {
+          "startingColumn" : 0,
+          "startingLine" : 15
+        },
+        "values" : [
+          "Skip ${applicationName} Timeline item"
+        ]
+      }
+    ]
+  },
+  "version" : 2
+}

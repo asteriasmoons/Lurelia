@@ -23,6 +23,8 @@ struct LureliaRoutineActivityAttributes: ActivityAttributes {
         var endDate: Date
         var isFinished: Bool
         var colorHex: String
+        var isPaused: Bool?
+        var pausedRemainingSeconds: TimeInterval?
     }
     
     var routineID: String

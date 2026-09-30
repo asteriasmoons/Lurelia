@@ -1,0 +1,1572 @@
+import PhotosUI
+import SwiftData
+import SwiftUI
+import UIKit
+
+struct LureliaReportSurfaceCard<Content: View>: View {
+    @Environment(\.appTheme) private var theme
+
+    let cornerRadius: CGFloat
+    let padding: CGFloat
+    let borderColor: Color?
+    @ViewBuilder let content: Content
+
+    init(
+        cornerRadius: CGFloat,
+        padding: CGFloat = LSpacing.cardPadding,
+        borderColor: Color? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.cornerRadius = cornerRadius
+        self.padding = padding
+        self.borderColor = borderColor
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(padding)
+            .background(
+                theme.palette.surface,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        (borderColor ?? theme.palette.textSecondary)
+                            .opacity(borderColor == nil ? 0.24 : 0.72),
+                        lineWidth: 1
+                    )
+            }
+    }
+}
+
+struct LureliaReportCenterView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appTheme) private var theme
+    @EnvironmentObject private var appState: LureliaReportRouter
+    @State private var showingBugReport = false
+    @State private var showingBetaFeedback = false
+    @State private var showingFeatureRequest = false
+    @State private var showingSubmitted = false
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+                reportCenterHeader
+
+                Button { showingBugReport = true } label: {
+                    reportCard(
+                        title: "Bug Report",
+                        subtitle: "Tell Voxiverse what went wrong.",
+                        asset: "bug",
+                        accentIndex: 0
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button { showingBetaFeedback = true } label: {
+                    reportCard(
+                        title: "Beta Feedback",
+                        subtitle: "Share what you tested and how it felt.",
+                        asset: "chatstar",
+                        accentIndex: 1
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button { showingFeatureRequest = true } label: {
+                    reportCard(
+                        title: "Feature Request",
+                        subtitle: "Request something new for Lurelia.",
+                        asset: "brightbulb",
+                        accentIndex: 2
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button { showingSubmitted = true } label: {
+                    reportCard(
+                        title: "Submitted",
+                        subtitle: "View reports sent from this device.",
+                        asset: "inbox",
+                        accentIndex: 3
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, LSpacing.pageHorizontal)
+            .padding(.top, 24)
+            .padding(.bottom, 100)
+        }
+        .scrollIndicators(.hidden)
+        .background { theme.palette.background.ignoresSafeArea() }
+        .lureliaReportAdaptivePresentation(isPresented: $showingBugReport, useFullScreenCover: horizontalSizeClass == .regular) {
+            LureliaBugReportView()
+        }
+        .lureliaReportAdaptivePresentation(isPresented: $showingBetaFeedback, useFullScreenCover: horizontalSizeClass == .regular) {
+            LureliaBetaFeedbackView()
+        }
+        .lureliaReportAdaptivePresentation(isPresented: $showingFeatureRequest, useFullScreenCover: horizontalSizeClass == .regular) {
+            LureliaFeatureRequestView()
+        }
+        .lureliaReportAdaptivePresentation(isPresented: $showingSubmitted, useFullScreenCover: horizontalSizeClass == .regular) {
+            LureliaSubmittedReportsView()
+        }
+        .onAppear {
+            if appState.pendingReportConversationID != nil {
+                showingSubmitted = true
+            }
+        }
+        .onChange(of: appState.pendingReportConversationID) { _, newValue in
+            if newValue != nil {
+                showingSubmitted = true
+            }
+        }
+    }
+
+    private var reportCenterHeader: some View {
+        let eyebrowTint = theme.palette.secondaryAccent
+        let closeTint = theme.palette.primaryAction
+
+        return HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("VOXIVERSE")
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .tracking(1.6)
+                    .bubblyReportCenterMaterial(tint: eyebrowTint)
+
+                Text("Send a Report")
+                    .font(.system(size: 32, weight: .black, design: .rounded))
+                    .foregroundStyle(LColors.headingPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                dismiss()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(theme.palette.background)
+
+                    BubblyIconMaterial(tint: closeTint)
+                        .mask {
+                            Circle()
+                                .strokeBorder(lineWidth: 1.35)
+                        }
+
+                    Image("xmarkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .bubblyReportCenterMaterial(tint: closeTint)
+                }
+                .frame(width: 46, height: 46)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
+        }
+    }
+
+    private func reportCard(
+        title: String,
+        subtitle: String,
+        asset: String,
+        accentIndex: Int
+    ) -> some View {
+        let accent = theme.palette.rotation[accentIndex % theme.palette.rotation.count]
+
+        return LureliaReportSurfaceCard(cornerRadius: 24, borderColor: accent) {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(theme.palette.raisedSurface)
+
+                    BubblyIconMaterial(tint: accent)
+                        .mask {
+                            Circle()
+                                .strokeBorder(lineWidth: 1.2)
+                        }
+
+                    BubblyIconMaterial(tint: accent)
+                        .mask {
+                            Image(asset)
+                                .resizable()
+                                .scaledToFit()
+                        }
+                        .frame(width: 24, height: 24)
+                }
+                .frame(width: 54, height: 54)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .black, design: .rounded))
+                        .bubblyReportCenterMaterial(tint: accent)
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .bubblyReportCenterMaterial(tint: accent)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 0)
+
+                Image("chevright")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 16, height: 16)
+                    .bubblyReportCenterMaterial(tint: accent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+struct LureliaSubmittedReportsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
+    @EnvironmentObject private var appState: LureliaReportRouter
+    @Query(sort: \SubmittedReport.submittedAt, order: .reverse) private var reports: [SubmittedReport]
+    @State private var selectedReport: SubmittedReport?
+    @State private var shouldOpenConversationForSelectedReport = false
+    @State private var isRefreshingConversations = false
+
+    private let reportGridColumns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+    private let reportGridCardContentHeight: CGFloat = 160
+    private let reportGridTitleHeight: CGFloat = 18
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+                LureliaReportHeader(
+                    eyebrow: "REPORTS",
+                    title: "Submitted",
+                    eyebrowColor: theme.palette.secondaryAccent,
+                    bubbly: true
+                ) {
+                    dismiss()
+                }
+
+                if reports.isEmpty {
+                    LureliaReportSurfaceCard(cornerRadius: 22) {
+                        VStack(spacing: 10) {
+                            Image("inbox")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 32, height: 32)
+                                .foregroundStyle(LGradients.header)
+                            Text("No submitted reports")
+                                .font(.system(size: 16, weight: .black, design: .rounded))
+                                .foregroundStyle(LColors.textPrimary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                    }
+                } else {
+                    LazyVGrid(columns: reportGridColumns, spacing: 12) {
+                        ForEach(reports.indices, id: \.self) { index in
+                            let report = reports[index]
+                            Button {
+                                shouldOpenConversationForSelectedReport = false
+                                selectedReport = report
+                            } label: {
+                                submittedReportCard(report, accentIndex: index)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, LSpacing.pageHorizontal)
+            .padding(.top, 24)
+            .padding(.bottom, 100)
+        }
+        .scrollIndicators(.hidden)
+        .background { theme.palette.background.ignoresSafeArea() }
+        .lureliaReportAdaptivePresentation(isPresented: selectedReportPresented, useFullScreenCover: horizontalSizeClass == .regular) {
+            if let selectedReport {
+                LureliaSubmittedReportDetailView(
+                    report: selectedReport,
+                    openConversationOnAppear: shouldOpenConversationForSelectedReport
+                )
+                .onDisappear {
+                    shouldOpenConversationForSelectedReport = false
+                }
+            }
+        }
+        .onAppear(perform: openPendingConversationTarget)
+        .onChange(of: appState.pendingReportConversationID) { _, _ in
+            openPendingConversationTarget()
+        }
+        .task(id: reportRefreshKey) {
+            await refreshConversationSummaries()
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: LureliaReportConversationNotificationManager.conversationDataDidChange
+        )) { _ in
+            Task { await refreshConversationSummaries() }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshConversationSummaries() }
+        }
+    }
+
+    private func openPendingConversationTarget() {
+        guard let pendingID = appState.pendingReportConversationID else { return }
+        guard let report = reports.first(where: { $0.reportID == pendingID }) else { return }
+        shouldOpenConversationForSelectedReport = true
+        selectedReport = report
+        _ = appState.consumePendingReportConversationID()
+    }
+
+    private var reportRefreshKey: String {
+        reports.map(\.reportID).joined(separator: "|")
+    }
+
+    private func refreshConversationSummaries() async {
+        guard !isRefreshingConversations else { return }
+        guard !reports.isEmpty else { return }
+        isRefreshingConversations = true
+        defer { isRefreshingConversations = false }
+
+        let service = LureliaReportConversationService()
+        for report in reports {
+            _ = await service.fetchSummary(for: report, modelContext: modelContext)
+        }
+    }
+
+    private func submittedReportCard(_ report: SubmittedReport, accentIndex: Int) -> some View {
+        let accent = theme.palette.rotation[accentIndex % theme.palette.rotation.count]
+
+        return LureliaReportSurfaceCard(cornerRadius: 22, padding: 11, borderColor: accent) {
+            VStack(alignment: .center, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        Circle()
+                            .fill(theme.palette.raisedSurface)
+
+                        BubblyIconMaterial(tint: accent)
+                            .mask { Circle().strokeBorder(lineWidth: 1.2) }
+
+                        Image(reportIconName(for: report))
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 22, height: 22)
+                            .bubblyIconMaterial(tint: accent)
+                    }
+                    .frame(width: 48, height: 48)
+
+                    if report.conversationState == .invited || report.conversationUnreadCount > 0 {
+                        Circle()
+                            .fill(report.conversationUnreadCount > 0 ? AnyShapeStyle(LColors.accents.contrast) : AnyShapeStyle(LColors.accents.primary))
+                            .frame(width: 13, height: 13)
+                            .overlay(Circle().strokeBorder(theme.palette.background, lineWidth: 2))
+                            .offset(x: 3, y: -3)
+                            .accessibilityHidden(true)
+                    }
+                }
+
+                Text(report.title)
+                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .bubblyIconMaterial(tint: accent)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, minHeight: reportGridTitleHeight, maxHeight: reportGridTitleHeight)
+
+                VStack(alignment: .center, spacing: 3) {
+                    Text(report.submittedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .bubblyIconMaterial(tint: accent)
+                        .multilineTextAlignment(.center)
+
+                    Text(report.reportType)
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .bubblyIconMaterial(tint: accent)
+                        .multilineTextAlignment(.center)
+
+                    Text(report.reportID)
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        .bubblyIconMaterial(tint: accent)
+                        .multilineTextAlignment(.center)
+
+                }
+
+                HStack(spacing: 12) {
+                    if !report.attachments.isEmpty {
+                        Image("imagesign")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 17, height: 17)
+                            .bubblyIconMaterial(tint: accent)
+                    }
+
+                    Image("chevright")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                        .bubblyIconMaterial(tint: accent)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity, minHeight: reportGridCardContentHeight, maxHeight: reportGridCardContentHeight)
+        }
+    }
+
+    private func reportIconName(for report: SubmittedReport) -> String {
+        switch report.reportType {
+        case "Bug Report", "Bug":
+            return "bug"
+        case "Beta Feedback":
+            return "chatstar"
+        case "Feature Request":
+            return "brightbulb"
+        default:
+            return "document"
+        }
+    }
+
+    private var selectedReportPresented: Binding<Bool> {
+        Binding(
+            get: { selectedReport != nil },
+            set: { if !$0 { selectedReport = nil } }
+        )
+    }
+}
+
+struct LureliaSubmittedReportDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appTheme) private var theme
+    let report: SubmittedReport
+    let openConversationOnAppear: Bool
+    @State private var selectedAttachment: SubmittedReportAttachment?
+    @State private var showConversation = false
+    @State private var conversationState: LureliaReportConversationState
+    @State private var conversationUnreadCount: Int
+    @State private var didHandleInitialConversationOpen = false
+    @StateObject private var conversationService = LureliaReportConversationService()
+
+    init(report: SubmittedReport, openConversationOnAppear: Bool = false) {
+        self.report = report
+        self.openConversationOnAppear = openConversationOnAppear
+        _conversationState = State(initialValue: report.conversationState)
+        _conversationUnreadCount = State(initialValue: report.conversationUnreadCount)
+    }
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
+
+    private let attachmentColumns = [
+        GridItem(.adaptive(minimum: 112, maximum: 112), spacing: 12)
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+                LureliaReportHeader(
+                    eyebrow: report.reportType,
+                    title: report.title,
+                    eyebrowColor: theme.palette.secondaryAccent,
+                    eyebrowFontSize: 15,
+                    bubbly: true
+                ) {
+                    dismiss()
+                }
+                LureliaReportConversationButton(
+                    state: conversationState,
+                    unreadCount: conversationUnreadCount,
+                    accentColor: theme.palette.primaryAction
+                ) {
+                    showConversation = true
+                }
+                reportDetails
+                attachmentsSection
+            }
+            .padding(.horizontal, LSpacing.pageHorizontal)
+            .padding(.top, 24)
+            .padding(.bottom, 120)
+        }
+        .scrollIndicators(.hidden)
+        .background { theme.palette.background.ignoresSafeArea() }
+        .lureliaReportAdaptivePresentation(isPresented: selectedAttachmentPresented, useFullScreenCover: horizontalSizeClass == .regular) {
+            if let selectedAttachment {
+                LureliaSubmittedReportImageView(attachment: selectedAttachment)
+            }
+        }
+        .lureliaReportAdaptivePresentation(isPresented: $showConversation, useFullScreenCover: horizontalSizeClass == .regular) {
+            LureliaReportConversationView(report: report)
+        }
+        .task {
+            await refreshConversationSummaryAsync()
+            openInitialConversationIfNeeded()
+        }
+        .onChange(of: showConversation) { _, isShowing in
+            if !isShowing {
+                refreshConversationSummary()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: LureliaReportConversationNotificationManager.conversationDataDidChange
+        )) { _ in
+            refreshConversationSummary()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            refreshConversationSummary()
+        }
+    }
+
+    private func refreshConversationSummary() {
+        Task {
+            await refreshConversationSummaryAsync()
+        }
+    }
+
+    private func refreshConversationSummaryAsync() async {
+        let summary = await conversationService.fetchSummary(for: report, modelContext: modelContext)
+        conversationState = summary.state
+        conversationUnreadCount = summary.reporterUnreadCount
+    }
+
+    private func openInitialConversationIfNeeded() {
+        guard openConversationOnAppear, !didHandleInitialConversationOpen else { return }
+        didHandleInitialConversationOpen = true
+        showConversation = true
+    }
+
+    @ViewBuilder
+    private var reportDetails: some View {
+        if report.reportType == "Feature Request" {
+            featureRequestDetails
+        } else if report.reportType == "Beta Feedback" {
+            betaFeedbackDetails
+        } else {
+            bugReportDetails
+        }
+    }
+
+    private var featureRequestDetails: some View {
+        let hasRelatedFeature = !report.relatedExistingFeature.trimmed.isEmpty
+        let hasAdditionalDetails = !report.additionalDetails.trimmed.isEmpty
+        let problemIndex = hasRelatedFeature ? 3 : 2
+        let desiredIndex = problemIndex + 1
+        let additionalIndex = desiredIndex + 1
+        let diagnosticsIndex = additionalIndex + (hasAdditionalDetails ? 1 : 0)
+
+        return VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+            LazyVGrid(columns: columns, spacing: 12) {
+                metadataTile(label: "Submitted", value: report.submittedAt.formatted(date: .abbreviated, time: .omitted), accentIndex: 0)
+                metadataTile(label: "Report ID", value: report.reportID, accentIndex: 1)
+                metadataTile(label: "Area", value: report.category, accentIndex: 2)
+                metadataTile(label: "Feature Type", value: displayFeatureType, accentIndex: 3)
+                metadataTile(label: "Importance", value: report.featureImportance, accentIndex: 4)
+                metadataTile(label: "Who Is This For?", value: report.intendedAudience, accentIndex: 5)
+                metadataTile(label: "Where Should It Live?", value: report.desiredLocation, accentIndex: 6)
+                metadataTile(label: "Saved Data", value: report.requiresSavedData, accentIndex: 7)
+                metadataTile(label: "Notifications", value: report.needsNotifications, accentIndex: 8)
+                metadataTile(label: "Sharing", value: report.needsSharing, accentIndex: 9)
+                metadataTile(label: "AI", value: report.needsAI, accentIndex: 10)
+            }
+
+            reportTextSection(
+                title: "What Should the Feature Do?",
+                text: report.featureDescription,
+                headerColor: theme.palette.primaryAction,
+                borderColor: theme.palette.primaryAction,
+                bubblyHeader: true
+            )
+            reportTextSection(
+                title: "How Should It Work?",
+                text: report.imaginedWorkflow,
+                headerColor: theme.palette.secondaryAccent,
+                borderColor: theme.palette.secondaryAccent,
+                bubblyHeader: true
+            )
+            if hasRelatedFeature {
+                reportTextSection(
+                    title: "Related Existing Feature",
+                    text: report.relatedExistingFeature,
+                    headerColor: theme.palette.indicators,
+                    borderColor: theme.palette.indicators,
+                    bubblyHeader: true
+                )
+            }
+            reportTextSection(
+                title: "Problem or Limitation",
+                text: report.problemAddressed,
+                headerColor: theme.palette.primaryAction,
+                borderColor: theme.palette.primaryAction,
+                bubblyHeader: true
+            )
+            reportTextSection(
+                title: "Desired Result",
+                text: report.desiredResult,
+                headerColor: theme.palette.secondaryAccent,
+                borderColor: theme.palette.secondaryAccent,
+                bubblyHeader: true
+            )
+            if hasAdditionalDetails {
+                reportTextSection(
+                    title: "Additional Details",
+                    text: report.additionalDetails,
+                    headerColor: theme.palette.indicators,
+                    borderColor: theme.palette.indicators,
+                    bubblyHeader: true
+                )
+            }
+            diagnosticsSection(headerColor: rotationColor(diagnosticsIndex), usesBubblyTiles: true)
+        }
+    }
+
+    private var betaFeedbackDetails: some View {
+        VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+            LazyVGrid(columns: columns, spacing: 12) {
+                metadataTile(label: "Submitted", value: report.submittedAt.formatted(date: .abbreviated, time: .omitted), accentIndex: 0)
+                metadataTile(label: "Report Type", value: report.reportType, accentIndex: 1)
+                metadataTile(label: "Area", value: report.category, accentIndex: 2)
+                metadataTile(label: "Experience", value: report.overallExperience, accentIndex: 3)
+                metadataTile(label: "Report ID", value: report.reportID, accentIndex: 4)
+            }
+
+            reportTextSection(
+                title: "What Did You Test?",
+                text: report.testedWhat,
+                headerColor: theme.palette.primaryAction,
+                borderColor: theme.palette.primaryAction,
+                bubblyHeader: true
+            )
+            reportTextSection(
+                title: "What Worked Well?",
+                text: report.workedWell,
+                headerColor: theme.palette.secondaryAccent,
+                borderColor: theme.palette.secondaryAccent,
+                bubblyHeader: true
+            )
+            reportTextSection(
+                title: "What Could Be Better?",
+                text: report.couldBeBetter,
+                headerColor: theme.palette.indicators,
+                borderColor: theme.palette.indicators,
+                bubblyHeader: true
+            )
+            reportTextSection(
+                title: "Anything Unexpected?",
+                text: report.unexpected,
+                headerColor: theme.palette.primaryAction,
+                borderColor: theme.palette.primaryAction,
+                bubblyHeader: true
+            )
+            reportTextSection(
+                title: "Additional Thoughts",
+                text: report.additionalNotes,
+                headerColor: theme.palette.secondaryAccent,
+                borderColor: theme.palette.secondaryAccent,
+                bubblyHeader: true
+            )
+            diagnosticsSection(headerColor: rotationColor(5), usesBubblyTiles: true)
+        }
+    }
+
+    private var bugReportDetails: some View {
+        VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+            LazyVGrid(columns: columns, spacing: 12) {
+                metadataTile(label: "Submitted", value: report.submittedAt.formatted(date: .abbreviated, time: .omitted), accentIndex: 0)
+                metadataTile(label: "Status", value: report.status, accentIndex: 1)
+                metadataTile(label: "Area", value: report.category, accentIndex: 2)
+                metadataTile(label: "Severity", value: report.severity, accentIndex: 3)
+                metadataTile(label: "Frequency", value: report.frequency, accentIndex: 4)
+                metadataTile(label: "Report ID", value: report.reportID, accentIndex: 5)
+            }
+
+            reportTextSection(title: "What Happened", text: report.descriptionText, headerColor: theme.palette.primaryAction, borderColor: theme.palette.primaryAction, bubblyHeader: true)
+            reportTextSection(title: "Expected Behavior", text: report.expectedBehavior, headerColor: theme.palette.secondaryAccent, borderColor: theme.palette.secondaryAccent, bubblyHeader: true)
+
+            if !report.steps.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    LureliaReportSectionHeader(title: "Steps to Reproduce", color: theme.palette.indicators, bubbly: true)
+                    LureliaReportSurfaceCard(cornerRadius: 22, borderColor: theme.palette.indicators) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(report.steps.indices, id: \.self) { index in
+                                HStack(alignment: .center, spacing: 12) {
+                                    Text("\(index + 1)")
+                                        .font(.system(size: 13, weight: .black, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .shadow(color: Color.black.opacity(0.55), radius: 3, y: 2)
+                                        .frame(width: 28, height: 28)
+                                        .background {
+                                            BubblyIconMaterial(tint: theme.palette.indicators)
+                                                .clipShape(Circle())
+                                        }
+                                    Text(report.steps[index])
+                                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(LColors.textPrimary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            reportTextSection(title: "Additional Notes", text: report.additionalNotes, headerColor: theme.palette.primaryAction, borderColor: theme.palette.primaryAction, bubblyHeader: true)
+            diagnosticsSection(headerColor: theme.palette.secondaryAccent, usesBubblyTiles: true)
+        }
+    }
+
+    @ViewBuilder
+    private var attachmentsSection: some View {
+        if !report.attachments.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                LureliaReportSectionHeader(
+                    title: report.reportType == "Feature Request" ? "Reference Images" : "Attachments",
+                    color: rotationColor(attachmentsSectionAccentIndex),
+                    bubbly: true
+                )
+                LazyVGrid(columns: attachmentColumns, spacing: 12) {
+                    ForEach(report.attachments.sorted { $0.createdAt < $1.createdAt }) { attachment in
+                        Button { selectedAttachment = attachment } label: {
+                            LureliaSubmittedReportAttachmentCard(attachment: attachment)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+
+    private func diagnosticsSection(headerColor: Color? = nil, usesBubblyTiles: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LureliaReportSectionHeader(title: "Diagnostics", color: headerColor, bubbly: usesBubblyTiles)
+            LazyVGrid(columns: columns, spacing: 12) {
+                metadataTile(label: "App", value: report.appName, accentIndex: usesBubblyTiles ? 0 : nil)
+                metadataTile(label: "Version", value: report.appVersion, accentIndex: usesBubblyTiles ? 1 : nil)
+                metadataTile(label: "Build", value: report.buildNumber, accentIndex: usesBubblyTiles ? 2 : nil)
+                metadataTile(label: "Device", value: report.deviceModel, accentIndex: usesBubblyTiles ? 3 : nil)
+                metadataTile(label: "iOS", value: report.iOSVersion, accentIndex: usesBubblyTiles ? 4 : nil)
+                metadataTile(label: "Screen", value: displayScreenName, accentIndex: usesBubblyTiles ? 5 : nil)
+            }
+        }
+    }
+
+    private var displayScreenName: String {
+        let trimmed = report.screenName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let last = trimmed.split(separator: ">", omittingEmptySubsequences: true).last {
+            return String(last).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return trimmed
+    }
+
+    private var displayFeatureType: String {
+        report.featureType == "Enhancement to Existing Feature"
+            ? "Enhancement"
+            : report.featureType
+    }
+
+    private var attachmentsSectionAccentIndex: Int {
+        switch report.reportType {
+        case "Feature Request":
+            let sectionCount = 4
+                + (report.relatedExistingFeature.trimmed.isEmpty ? 0 : 1)
+                + (report.additionalDetails.trimmed.isEmpty ? 0 : 1)
+            return sectionCount + 1
+        case "Beta Feedback":
+            return 6
+        default:
+            let additionalNotesIndex = report.steps.isEmpty ? 2 : 3
+            return additionalNotesIndex + 2
+        }
+    }
+
+    private func rotationColor(_ index: Int) -> Color {
+        theme.palette.rotation[index % theme.palette.rotation.count]
+    }
+
+    @ViewBuilder
+    private func metadataTile(label: String, value: String, accentIndex: Int? = nil) -> some View {
+        let content = VStack(alignment: .leading, spacing: 6) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .black, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(accentIndex == nil ? LColors.accents.contrast : Color.black)
+            Text(value.trimmed.isEmpty ? "Not provided" : value)
+                .font(.system(size: 13, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    value.trimmed.isEmpty
+                        ? AnyShapeStyle(Color.white.opacity(0.68))
+                        : AnyShapeStyle(Color.white)
+                )
+                .shadow(color: Color.black.opacity(0.58), radius: 3, y: 2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+
+        if let accentIndex {
+            content
+                .background {
+                    BubblyCardMaterial(
+                        tint: theme.palette.rotation[accentIndex % theme.palette.rotation.count],
+                        cornerRadius: 18
+                    )
+                }
+        } else {
+            LureliaReportSurfaceCard(cornerRadius: 18, padding: 0) { content }
+        }
+    }
+
+    private func reportTextSection(
+        title: String,
+        text: String,
+        headerColor: Color? = nil,
+        borderColor: Color? = nil,
+        bubblyHeader: Bool = false,
+        accentIndex: Int? = nil
+    ) -> some View {
+        let resolvedHeaderColor = accentIndex.map { rotationColor($0) } ?? headerColor
+        let resolvedBorderColor = accentIndex.map { rotationColor($0 + 1) } ?? borderColor
+
+        return VStack(alignment: .leading, spacing: 12) {
+            LureliaReportSectionHeader(title: title, color: resolvedHeaderColor, bubbly: bubblyHeader || accentIndex != nil)
+            LureliaReportSurfaceCard(cornerRadius: 22, borderColor: resolvedBorderColor) {
+                Text(text.trimmed.isEmpty ? "Not provided" : text)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(text.trimmed.isEmpty ? LColors.textSecondary : LColors.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private var selectedAttachmentPresented: Binding<Bool> {
+        Binding(
+            get: { selectedAttachment != nil },
+            set: { if !$0 { selectedAttachment = nil } }
+        )
+    }
+}
+
+struct LureliaSubmittedReportImageView: View {
+    @Environment(\.dismiss) private var dismiss
+    let attachment: SubmittedReportAttachment
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            if let image = UIImage(data: attachment.imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
+            } else {
+                Text("Image unavailable")
+                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .foregroundStyle(LColors.textPrimary)
+            }
+
+            Button { dismiss() } label: {
+                Image("xmarkwavy")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 17, height: 17)
+                    .foregroundStyle(LGradients.header)
+                    .frame(width: 44, height: 44)
+                    .background(LColors.glassSurface, in: Circle())
+                    .overlay { Circle().strokeBorder(LColors.glassBorder, lineWidth: 1) }
+            }
+            .buttonStyle(.plain)
+            .padding()
+        }
+    }
+}
+
+enum LureliaReportFormOptions {
+
+    static let featureTypes = [
+        "New Feature", "Enhancement", "New Tool",
+        "New View or Screen", "New Integration", "Automation",
+        "Customization Option", "Accessibility", "Import / Export",
+        "Widget", "Other"
+    ]
+}
+
+struct LureliaReportFormScaffold<Content: View>: View {
+    @Environment(\.appTheme) private var theme
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: LSpacing.sectionGap) {
+                content
+            }
+            .padding(.horizontal, LSpacing.pageHorizontal)
+            .padding(.top, 24)
+            .padding(.bottom, 80)
+        }
+        .scrollIndicators(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .lureliaDismissKeyboardOnTap()
+        .background { theme.palette.background.ignoresSafeArea() }
+    }
+}
+
+struct LureliaReportHeader: View {
+    @Environment(\.appTheme) private var theme
+    let eyebrow: String
+    let title: String
+    var eyebrowColor: Color? = nil
+    var eyebrowFontSize: CGFloat = 13
+    var bubbly = false
+    let close: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(eyebrow)
+                    .font(.system(size: eyebrowFontSize, weight: .black, design: .rounded))
+                    .tracking(1.6)
+                    .foregroundStyle(eyebrowColor ?? LColors.accents.contrast)
+                    .bubblyIconMaterial(tint: eyebrowColor ?? LColors.accents.contrast, isEnabled: bubbly)
+
+                Text(title)
+                    .font(.system(size: 32, weight: .black, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: close) {
+                Image("xmarkwavy")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .foregroundStyle(theme.palette.primaryAction)
+                    .bubblyIconMaterial(tint: theme.palette.primaryAction, isEnabled: bubbly)
+                    .frame(width: 46, height: 46)
+                    .background {
+                        Circle()
+                            .fill(theme.palette.background)
+                            .shadow(color: Color.clear, radius: 14, y: 7)
+                        if bubbly {
+                            BubblyIconMaterial(tint: theme.palette.primaryAction)
+                                .mask { Circle().strokeBorder(lineWidth: 1.35) }
+                        } else {
+                            Circle().strokeBorder(theme.palette.primaryAction, lineWidth: 1.35)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
+        }
+    }
+}
+
+struct LureliaReportIcon: View {
+    let asset: String
+    let size: CGFloat
+    let iconSize: CGFloat
+
+    var body: some View {
+        Image(asset)
+            .renderingMode(.template)
+            .resizable()
+            .scaledToFit()
+            .frame(width: iconSize, height: iconSize)
+            .foregroundStyle(LGradients.header)
+            .frame(width: size, height: size)
+            .background(LColors.glassSurface, in: Circle())
+            .overlay { Circle().strokeBorder(LColors.glassBorder, lineWidth: 1) }
+    }
+}
+
+struct LureliaReportInfoCard: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let message: String
+    var borderColor: Color? = nil
+
+    var body: some View {
+        LureliaReportSurfaceCard(
+            cornerRadius: 22,
+            borderColor: borderColor
+        ) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+                Text(message)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+struct LureliaReportSectionHeader: View {
+    let title: String
+    var color: Color? = nil
+    var bubbly = false
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 20, weight: .black, design: .rounded))
+            .foregroundStyle(color ?? LColors.accents.contrast)
+            .bubblyIconMaterial(tint: color ?? LColors.accents.contrast, isEnabled: bubbly)
+    }
+}
+
+struct LureliaReportTextField: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    var borderColor: Color? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            fieldLabel(title)
+            TextField(placeholder, text: $text, axis: .vertical)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
+                .tint(theme.palette.textPrimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.palette.surface))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(borderColor ?? theme.palette.textSecondary.opacity(0.35), lineWidth: 1.15)
+                )
+        }
+    }
+}
+
+struct LureliaReportTextEditor: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    var minHeight: CGFloat
+    var borderColor: Color? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            fieldLabel(title)
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(theme.palette.textSecondary.opacity(0.72))
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 18)
+                }
+
+                TextEditor(text: $text)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+                    .tint(theme.palette.textPrimary)
+                    .scrollContentBackground(.hidden)
+                    .scrollDismissesKeyboard(.interactively)
+                    .frame(minHeight: minHeight)
+                    .padding(10)
+            }
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.palette.surface))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(borderColor ?? theme.palette.textSecondary.opacity(0.35), lineWidth: 1.15)
+            )
+        }
+    }
+}
+
+struct LureliaReportPickerField: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let options: [String]
+    @Binding var selection: String
+    var bubblyTint: Color? = nil
+    var textShadow = false
+    var usesCardMaterial = false
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            fieldLabel(title)
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.spring(response: 0.26, dampingFraction: 0.88)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    pickerLabel
+                }
+                .buttonStyle(.plain)
+
+                if isExpanded {
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(options, id: \.self) { option in
+                                Button {
+                                    selection = option
+                                    withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
+                                        isExpanded = false
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(option)
+                                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                                            .foregroundStyle(theme.palette.textPrimary)
+                                            .shadow(color: textShadow ? Color.black.opacity(0.45) : .clear, radius: 3, y: 2)
+                                        Spacer()
+                                        if option == selection {
+                                            Image("checkwavy")
+                                                .renderingMode(.template)
+                                                .resizable()
+                                                .scaledToFit()
+                                                .frame(width: 13, height: 13)
+                                                .foregroundStyle(theme.palette.textPrimary)
+                                                .shadow(color: Color.black.opacity(0.45), radius: 3, y: 2)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 11)
+                                    .frame(minHeight: dropdownRowHeight)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                    .frame(height: dropdownHeight)
+                    .background {
+                        if let bubblyTint {
+                            if usesCardMaterial {
+                                BubblyCardMaterial(tint: bubblyTint, cornerRadius: 14)
+                            } else {
+                                BubblyTileSurface(tint: bubblyTint, cornerRadius: 14)
+                            }
+                        } else {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.palette.surface)
+                        }
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(
+                                usesCardMaterial
+                                    ? bubblyTint?.opacity(0.72) ?? theme.palette.textSecondary.opacity(0.35)
+                                    : theme.palette.textSecondary.opacity(bubblyTint == nil ? 0.35 : 0),
+                                lineWidth: 1.15
+                            )
+                    }
+                    .padding(.top, 8)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+    }
+
+    private var pickerLabel: some View {
+        HStack {
+            Text(selection)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
+                .shadow(color: textShadow ? Color.black.opacity(0.45) : .clear, radius: 3, y: 2)
+            Spacer()
+            Image("chevdown")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 11, height: 11)
+                .foregroundStyle(theme.palette.textSecondary)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background {
+            if let bubblyTint {
+                if usesCardMaterial {
+                    BubblyCardMaterial(tint: bubblyTint, cornerRadius: 14)
+                } else {
+                    BubblyTileSurface(tint: bubblyTint, cornerRadius: 14)
+                }
+            } else {
+                RoundedRectangle(cornerRadius: 14, style: .continuous).fill(theme.palette.surface)
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(
+                    usesCardMaterial
+                        ? bubblyTint?.opacity(0.72) ?? theme.palette.textSecondary.opacity(0.35)
+                        : theme.palette.textSecondary.opacity(bubblyTint == nil ? 0.35 : 0),
+                    lineWidth: 1.15
+                )
+        }
+    }
+
+    private var dropdownRowHeight: CGFloat { 42 }
+
+    private var dropdownHeight: CGFloat {
+        CGFloat(min(options.count, 4)) * dropdownRowHeight
+    }
+}
+
+struct LureliaReportDynamicStepsField: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    @Binding var steps: [String]
+    let maxSteps: Int
+    var accentColor: Color? = nil
+    var bubblyNumbers = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fieldLabel(title)
+            VStack(spacing: 10) {
+                ForEach(steps.indices, id: \.self) { index in
+                    HStack(alignment: .center, spacing: 10) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(accentColor ?? theme.palette.textPrimary)
+                            .bubblyIconMaterial(
+                                tint: accentColor ?? theme.palette.primaryAction,
+                                isEnabled: bubblyNumbers && accentColor != nil
+                            )
+                            .frame(width: stepControlSize, height: stepControlSize)
+                            .background {
+                                if bubblyNumbers {
+                                    Circle().fill(theme.palette.raisedSurface)
+                                } else {
+                                    Circle().fill(LGradients.tag)
+                                }
+                            }
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(
+                                        accentColor ?? theme.palette.textSecondary.opacity(0.35),
+                                        lineWidth: 1
+                                    )
+                            }
+                            .shadow(color: Color.clear, radius: 8, y: 4)
+
+                        LureliaReportTextField(
+                            title: "",
+                            placeholder: "Step \(index + 1)",
+                            text: $steps[index],
+                            borderColor: accentColor
+                        )
+
+                        if steps.count > 1 {
+                            Button {
+                                steps.remove(at: index)
+                            } label: {
+                                Image("xmarkwavy")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 13, height: 13)
+                                    .foregroundStyle(theme.palette.textSecondary)
+                                    .frame(width: stepControlSize, height: stepControlSize)
+                                    .background(theme.palette.surface, in: Circle())
+                                    .overlay {
+                                        Circle()
+                                            .strokeBorder(theme.palette.textSecondary.opacity(0.35), lineWidth: 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                if steps.count < maxSteps {
+                    Button {
+                        steps.append("")
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image("addwavy")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 14, height: 14)
+                                .foregroundStyle(accentColor ?? theme.palette.primaryAction)
+                                .bubblyIconMaterial(tint: accentColor ?? theme.palette.primaryAction)
+                            Text("Add Step")
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .foregroundStyle(accentColor ?? theme.palette.primaryAction)
+                                .bubblyIconMaterial(tint: accentColor ?? theme.palette.primaryAction)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(accentColor ?? theme.palette.primaryAction, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var stepControlSize: CGFloat { 36 }
+}
+
+struct LureliaReportAttachmentsPicker: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    @Binding var selectedPhotos: [PhotosPickerItem]
+    let attachmentData: [Data]
+    var accentColor: Color? = nil
+    var sectionColor: Color? = nil
+    var bubbly = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LureliaReportSectionHeader(title: title, color: sectionColor ?? accentColor, bubbly: bubbly)
+            PhotosPicker(selection: $selectedPhotos, maxSelectionCount: 3, matching: .images) {
+                LureliaReportSurfaceCard(cornerRadius: 18, borderColor: accentColor) {
+                    HStack(spacing: 14) {
+                        Image("circleimage")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 22, height: 22)
+                            .foregroundStyle(accentColor ?? theme.palette.indicators)
+                            .bubblyIconMaterial(tint: accentColor ?? theme.palette.indicators, isEnabled: bubbly)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Add Screenshots")
+                                .font(.system(size: 15, weight: .black, design: .rounded))
+                                .foregroundStyle(theme.palette.textPrimary)
+                            Text("Up to 3 images")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(theme.palette.textSecondary)
+                        }
+
+                        Spacer()
+
+                        Text("\(attachmentData.count)/3")
+                            .font(.system(size: 13, weight: .black, design: .rounded))
+                            .foregroundStyle(theme.palette.textSecondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+struct LureliaReportDiagnosticsCard: View {
+    let screenName: String
+    var borderColor: Color? = nil
+
+    var body: some View {
+        LureliaReportInfoCard(
+            title: "Automatic Diagnostics",
+            message: "Lurelia will include its app version, build number, device model, iOS version, screen, and submission time from \(screenName).",
+            borderColor: borderColor
+        )
+    }
+}
+
+struct LureliaReportStatusCards: View {
+    @Environment(\.appTheme) private var theme
+    let successTitle: String
+    let reportID: String?
+    let error: String?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if let error {
+                LureliaReportSurfaceCard(cornerRadius: 18) {
+                    Text(error)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            if let reportID {
+                LureliaReportSurfaceCard(cornerRadius: 18) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(successTitle)
+                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
+                        Text("Voxiverse report ID: \(reportID)")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+}
+
+struct LureliaReportSubmitButton: View {
+    @Environment(\.appTheme) private var theme
+    let title: String
+    let sendingTitle: String
+    let canSubmit: Bool
+    let isSubmitting: Bool
+    var bubblyTint: Color? = nil
+    var usesCardMaterial = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                if isSubmitting {
+                    ProgressView()
+                        .tint(theme.palette.textPrimary)
+                } else {
+                    Image("sendbutton")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 17, height: 17)
+                }
+
+                Text(isSubmitting ? sendingTitle : title)
+                    .font(.system(size: 16, weight: .black, design: .rounded))
+            }
+            .foregroundStyle(theme.palette.textPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .background {
+                if let bubblyTint {
+                    if usesCardMaterial {
+                        BubblyCardMaterial(tint: bubblyTint, cornerRadius: LSpacing.buttonRadius)
+                    } else {
+                        BubblyTileSurface(tint: bubblyTint, cornerRadius: LSpacing.buttonRadius)
+                    }
+                } else {
+                    RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous).fill(LGradients.header)
+                }
+            }
+            .opacity(canSubmit ? 1 : 0.45)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSubmit)
+    }
+}
+
+struct LureliaSubmittedReportAttachmentCard: View {
+    let attachment: SubmittedReportAttachment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.10))
+
+                if let image = UIImage(data: attachment.imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 96, height: 96)
+                        .clipped()
+                } else {
+                    Image("imagesign")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .foregroundStyle(LColors.textSecondary)
+                }
+            }
+            .frame(width: 96, height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(LColors.glassBorder, lineWidth: 1)
+            }
+
+            Text(attachment.displayName)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(LColors.textSecondary)
+                .lineLimit(1)
+                .frame(width: 96, alignment: .center)
+        }
+        .padding(8)
+        .frame(width: 112, height: 132)
+        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+        }
+    }
+}
+
+func fieldLabel(_ title: String) -> some View {
+    Group {
+        if !title.isEmpty {
+            Text(title)
+                .font(.system(size: 12, weight: .black, design: .rounded))
+                .foregroundStyle(LColors.textSecondary)
+        }
+    }
+}
+
+private extension String {
+    var trimmed: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+private extension View {
+    func bubblyReportCenterMaterial(tint: Color) -> some View {
+        foregroundStyle(.clear)
+            .overlay {
+                BubblyIconMaterial(tint: tint)
+                    .mask { self }
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func lureliaReportAdaptivePresentation<Content: View>(
+        isPresented: Binding<Bool>,
+        useFullScreenCover: Bool,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        if useFullScreenCover {
+            self.fullScreenCover(isPresented: isPresented, content: content)
+        } else {
+            self.sheet(isPresented: isPresented, content: content)
+        }
+    }
+}

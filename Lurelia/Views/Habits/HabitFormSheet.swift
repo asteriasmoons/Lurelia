@@ -10,8 +10,15 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 
+struct HabitEditorLaunchRequest: Identifiable {
+    let id = UUID()
+    let habit: LureliaHabit?
+    let color: Color
+}
+
 struct LureliaHabitFormSheet: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     /// `nil` = create mode, non-nil = edit mode
     let habit: LureliaHabit?
@@ -20,12 +27,20 @@ struct LureliaHabitFormSheet: View {
 
     init(
         habit: LureliaHabit?,
+        initialColor: Color? = nil,
         onSaved: ((LureliaHabit) -> Void)? = nil,
         onClose: @escaping () -> Void
     ) {
         self.habit = habit
         self.onSaved = onSaved
         self.onClose = onClose
+        let savedColor = habit.map { habit in
+            let trimmedHex = habit.colorHex.trimmingCharacters(in: .whitespacesAndNewlines)
+            return Color(lureliaHex: trimmedHex.isEmpty ? "#7d19f7" : trimmedHex)
+        }
+        _selectedColor = State(
+            initialValue: savedColor ?? initialColor ?? Color(lureliaHex: "#7d19f7")
+        )
     }
 
     private var isEditing: Bool { habit != nil }
@@ -41,17 +56,9 @@ struct LureliaHabitFormSheet: View {
     @State private var showIconPicker = false
     @State private var isArchived = false
 
-    /// User-selected habit color. In create mode this stays `nil` so the sheet
-    /// uses the normal neutral glass aesthetic. In edit mode it is loaded from
-    /// the habit's saved `colorHex` and drives the sheet's visual identity.
-    @State private var selectedColor: Color? = nil
+    @State private var selectedColor: Color
 
-    /// The tint that in-sheet glass containers use.
-    /// - Edit mode: the habit's saved color (once chosen)
-    /// - New mode: nil, which lets `GlassCard` use the shared neutral surface
-    private var formTint: Color? {
-        selectedColor
-    }
+    private var formTint: Color { selectedColor }
 
     // MARK: - Notification state
 
@@ -115,7 +122,7 @@ struct LureliaHabitFormSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
@@ -136,18 +143,18 @@ struct LureliaHabitFormSheet: View {
                         }
 
                         formSection(label: "DESCRIPTION") {
-                            GlassCard(tint: formTint) {
+                            habitSurface {
                                 ZStack(alignment: .topLeading) {
                                     if details.isEmpty {
                                         Text("Optional description")
                                             .font(.system(size: 15, design: .rounded))
-                                            .foregroundStyle(.white.opacity(0.25))
+                                            .foregroundStyle(theme.palette.textSecondary.opacity(0.55))
                                             .padding(.top, 8)
                                             .padding(.leading, 4)
                                     }
                                     TextEditor(text: $details)
                                         .font(.system(size: 15, design: .rounded))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(theme.palette.textPrimary)
                                         .scrollContentBackground(.hidden)
                                         .frame(minHeight: 60)
                                 }
@@ -212,13 +219,22 @@ struct LureliaHabitFormSheet: View {
                         // Archive (edit mode only)
                         if isEditing {
                             formSection(label: "ARCHIVE") {
-                                GlassCard(tint: formTint) {
-                                    Toggle(isOn: $isArchived) {
+                                habitSurface {
+                                    HStack(spacing: 12) {
                                         Text("Archive this habit")
                                             .font(.system(size: 15, design: .rounded))
-                                            .foregroundStyle(.white)
+                                            .foregroundStyle(theme.palette.textPrimary)
+
+                                        Spacer()
+
+                                        LureliaSlidingIconToggle(
+                                            isOn: $isArchived,
+                                            iconName: "xmarkwavy",
+                                            accentColor: selectedColor,
+                                            accessibilityLabel: "Archive this habit",
+                                            usesIconMaterial: true
+                                        )
                                     }
-                                    .tint(selectedColor ?? LColors.neutralPearl.opacity(0.72))
                                 }
                             }
                         }
@@ -240,7 +256,7 @@ struct LureliaHabitFormSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(isEditing ? "Save" : "Create") { commitHabit() }
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(canSave ? (selectedColor ?? LColors.textPrimary) : .white.opacity(0.25))
+                        .foregroundStyle(canSave ? selectedColor : .white.opacity(0.25))
                         .disabled(!canSave)
                 }
             }
@@ -273,6 +289,7 @@ struct LureliaHabitFormSheet: View {
         )) {
             alarmConfigSheet
         }
+        .presentationBackground(theme.palette.background)
     }
 
     // MARK: - Form helpers
@@ -290,52 +307,83 @@ struct LureliaHabitFormSheet: View {
     }
 
     private var habitAlarmSection: some View {
-        GlassCard(tint: formTint) {
+        habitSurface {
             VStack(alignment: .leading, spacing: 14) {
-                Toggle(isOn: alarmEnabledBinding) {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(alarmEnabled ? "Alarm On" : "Alarm Off")
-                            .font(.system(size: 14, weight: .black, design: .rounded))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
 
                         Text(alarmEnabled ? alarmSummaryText : "Use a system alarm for this habit.")
-                            .font(.system(size: 12, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.58))
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(theme.palette.textSecondary)
                             .lineLimit(2)
                     }
+
+                    Spacer(minLength: 8)
+
+                    LureliaSlidingIconToggle(
+                        isOn: alarmEnabledBinding,
+                        iconName: "petalarm",
+                        accentColor: selectedColor,
+                        accessibilityLabel: "Alarm",
+                        usesIconMaterial: true
+                    )
                 }
-                .tint(selectedColor ?? LColors.neutralPearl.opacity(0.72))
 
                 if alarmEnabled {
                     Button {
                         showAlarmConfig = true
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "alarm.fill")
-                                .font(.system(size: 16, weight: .bold))
-                                .foregroundStyle(selectedColor.map { AnyShapeStyle($0) } ?? AnyShapeStyle(LColors.neutralPearl.opacity(0.82)))
-                                .frame(width: 36, height: 36)
-                                .background(Color.white.opacity(0.08), in: Circle())
+                            ZStack {
+                                Circle()
+                                    .fill(Color.black.opacity(0.34))
+
+                                Circle()
+                                    .strokeBorder(selectedColor, lineWidth: 1)
+
+                                Image("petalarm")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 19, height: 19)
+                                    .foregroundStyle(selectedColor)
+                                    .bubblyIconMaterial(tint: selectedColor)
+                            }
+                            .frame(width: 40, height: 40)
 
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("Alarm Settings")
                                     .font(.system(size: 13, weight: .black, design: .rounded))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(theme.palette.textPrimary)
 
                                 Text(alarmSummaryText)
                                     .font(.system(size: 12, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.58))
+                                    .foregroundStyle(theme.palette.textSecondary)
                                     .lineLimit(2)
                             }
 
                             Spacer()
 
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .black))
-                                .foregroundStyle(.white.opacity(0.4))
+                            Image("chevright")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 17, height: 17)
+                                .foregroundStyle(selectedColor)
+                                .bubblyIconMaterial(tint: selectedColor)
                         }
                         .padding(12)
-                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .background(
+                            theme.palette.surface,
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(selectedColor, lineWidth: 1)
+                        }
                     }
                     .buttonStyle(.plain)
                 }
@@ -369,7 +417,7 @@ struct LureliaHabitFormSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label)
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(theme.palette.textSecondary)
                 .tracking(0.8)
             content()
         }
@@ -377,52 +425,50 @@ struct LureliaHabitFormSheet: View {
 
     @ViewBuilder
     private func textField(placeholder: String, text: Binding<String>) -> some View {
-        GlassCard(tint: formTint) {
+        habitSurface {
             TextField(placeholder, text: text)
                 .font(.system(size: 15, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(theme.palette.textPrimary)
         }
+    }
+
+    private func habitSurface<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                theme.palette.surface,
+                in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                    .strokeBorder(selectedColor, lineWidth: 1)
+            }
     }
 
     // MARK: - Color Picker Row
 
     @ViewBuilder
     private var habitColorPickerRow: some View {
-        GlassCard(tint: formTint) {
+        habitSurface {
             HStack(spacing: 12) {
                 Text("Habit Color")
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.palette.textPrimary)
 
                 Spacer(minLength: 8)
 
-                if selectedColor != nil {
-                    Button {
-                        selectedColor = nil
-                    } label: {
-                        Text("Reset")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                    .buttonStyle(.plain)
-                }
-
                 ColorPicker(
                     "Habit Color",
-                    selection: colorPickerBinding,
+                    selection: $selectedColor,
                     supportsOpacity: false
                 )
                 .labelsHidden()
                 .frame(width: 32, height: 32)
             }
         }
-    }
-
-    private var colorPickerBinding: Binding<Color> {
-        Binding(
-            get: { selectedColor ?? Color(lureliaHex: "#7d19f7") },
-            set: { selectedColor = $0 }
-        )
     }
 
     private func syncReminderTimes(to count: Int) {
@@ -542,7 +588,7 @@ struct LureliaHabitFormSheet: View {
         // Persist the user-selected color. Fall back to the existing value (or
         // the model default) if the user didn't touch the picker, so we never
         // clobber an existing habit's color with a blank.
-        if let picked = selectedColor, let hex = picked.toHex() {
+        if let hex = selectedColor.toHex() {
             target.colorHex = hex
         }
         target.updatedAt = Date()
@@ -695,6 +741,84 @@ struct LureliaHabitFormSheet: View {
         let value = kind == .everyXHours ? firstDelta / 60 : firstDelta
         guard let start = dates.first, let end = dates.last else { return nil }
         return (kind, max(1, value), start, end)
+    }
+}
+
+struct HabitColorSelectionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
+
+    @State private var selectedColor: Color
+
+    let onContinue: (Color) -> Void
+
+    init(
+        initialColor: Color,
+        onContinue: @escaping (Color) -> Void
+    ) {
+        _selectedColor = State(initialValue: initialColor)
+        self.onContinue = onContinue
+    }
+
+    var body: some View {
+        ZStack {
+            theme.palette.background
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Choose Habit Color")
+                        .font(.system(size: 22, weight: .black, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+
+                    Text("Pick the color that will carry through this habit.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(theme.palette.textSecondary)
+                }
+
+                ColorPicker(
+                    selection: $selectedColor,
+                    supportsOpacity: false
+                ) {
+                    Text("Habit Color")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 58)
+                .background(
+                    theme.palette.surface,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(selectedColor, lineWidth: 1)
+                }
+
+                Button {
+                    onContinue(selectedColor)
+                    dismiss()
+                } label: {
+                    Text("Continue")
+                        .font(.system(size: 15, weight: .black, design: .rounded))
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background {
+                            BubblyCardMaterial(
+                                tint: selectedColor,
+                                cornerRadius: 16
+                            )
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+        }
+        .presentationDetents([.height(270)])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(theme.palette.background)
     }
 }
 

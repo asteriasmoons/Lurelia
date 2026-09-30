@@ -1,0 +1,40 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Calendar",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 27
+        }
+      },
+      {
+        "comment": "",
+        "key": "Upcoming Events",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 108
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose which calendar the Upcoming Events widget should show. Leave blank to include every visible calendar.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 110
+        }
+      },
+      {
+        "comment": "",
+        "key": "Calendar",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 114
+        }
+      }
+    ]
+  },
+  "version": 1
+}

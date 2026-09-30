@@ -1,0 +1,510 @@
+[
+  {
+    "typeName": "LureliaWidgetsExtension.LureliaCalendarEntity",
+    "mangledTypeName": "23LureliaWidgetsExtension0A14CalendarEntityV",
+    "kind": "struct",
+    "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+    "line": 20,
+    "conformances": [
+      "AppIntents.AppEntity",
+      "Swift.Identifiable",
+      "AppIntents.AppValue",
+      "AppIntents.DisplayRepresentable",
+      "AppIntents.PersistentlyIdentifiable",
+      "AppIntents.TypeDisplayRepresentable",
+      "AppIntents._IntentValue",
+      "Swift.Sendable",
+      "AppIntents.InstanceDisplayRepresentable",
+      "Swift.SendableMetatype",
+      "Foundation.CustomLocalizedStringResourceConvertible"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.AppEntity",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.Identifiable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.AppValue",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.DisplayRepresentable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.TypeDisplayRepresentable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents._IntentValue",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.InstanceDisplayRepresentable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Foundation.CustomLocalizedStringResourceConvertible",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "DefaultQuery",
+        "substitutedTypeName": "LureliaWidgetsExtension.LureliaCalendarEntityQuery",
+        "substitutedMangledTypeName": "23LureliaWidgetsExtension0A19CalendarEntityQueryV"
+      },
+      {
+        "typeAliasName": "ID",
+        "substitutedTypeName": "Swift.String",
+        "substitutedMangledTypeName": "SS"
+      },
+      {
+        "typeAliasName": "ValueType",
+        "substitutedTypeName": "LureliaWidgetsExtension.LureliaCalendarEntity",
+        "substitutedMangledTypeName": "23LureliaWidgetsExtension0A14CalendarEntityV"
+      },
+      {
+        "typeAliasName": "UnwrappedType",
+        "substitutedTypeName": "LureliaWidgetsExtension.LureliaCalendarEntity",
+        "substitutedMangledTypeName": "23LureliaWidgetsExtension0A14CalendarEntityV"
+      },
+      {
+        "typeAliasName": "Specification",
+        "substitutedTypeName": "AppIntents.EmptyResolverSpecification<LureliaWidgetsExtension.LureliaCalendarEntity>",
+        "substitutedMangledTypeName": "10AppIntents26EmptyResolverSpecificationVy23LureliaWidgetsExtension0F14CalendarEntityVG"
+      }
+    ],
+    "properties": [
+      {
+        "label": "id",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 21,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "name",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 22,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "colorHex",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 23,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "source",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 24,
+        "valueKind": "Runtime"
+      },
+      {
+        "label": "typeDisplayRepresentation",
+        "type": "AppIntents.TypeDisplayRepresentation",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "true",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 26,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.TypeDisplayRepresentation",
+          "arguments": [
+            {
+              "label": "name",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Calendar"
+            },
+            {
+              "label": "numericFormat",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "NilLiteral"
+            }
+          ]
+        }
+      },
+      {
+        "label": "displayRepresentation",
+        "type": "AppIntents.DisplayRepresentation",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 30,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.DisplayRepresentation",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "InitCall",
+              "value": {
+                "type": "Foundation.LocalizedStringResource",
+                "arguments": [
+                  {
+                    "label": "stringLiteral",
+                    "type": "Swift.String",
+                    "valueKind": "Runtime"
+                  }
+                ]
+              }
+            },
+            {
+              "label": "subtitle",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "InitCall",
+              "value": {
+                "type": "Foundation.LocalizedStringResource",
+                "arguments": [
+                  {
+                    "label": "stringLiteral",
+                    "type": "Swift.String",
+                    "valueKind": "Runtime"
+                  }
+                ]
+              }
+            },
+            {
+              "label": "image",
+              "type": "Swift.Optional<AppIntents.DisplayRepresentation.Image>",
+              "valueKind": "NilLiteral"
+            }
+          ]
+        }
+      },
+      {
+        "label": "defaultQuery",
+        "type": "LureliaWidgetsExtension.LureliaCalendarEntityQuery",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 37,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "LureliaWidgetsExtension.LureliaCalendarEntityQuery",
+          "arguments": []
+        }
+      },
+      {
+        "label": "applePrefix",
+        "type": "Swift.String",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 39,
+        "valueKind": "RawLiteral",
+        "value": "apple:"
+      }
+    ]
+  },
+  {
+    "typeName": "LureliaWidgetsExtension.LureliaCalendarEntityQuery",
+    "mangledTypeName": "23LureliaWidgetsExtension0A19CalendarEntityQueryV",
+    "kind": "struct",
+    "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+    "line": 54,
+    "conformances": [
+      "AppIntents.EntityQuery",
+      "AppIntents.DynamicOptionsProvider",
+      "AppIntents.PersistentlyIdentifiable",
+      "Swift.Sendable",
+      "AppIntents._SupportsAppDependencies",
+      "Swift.SendableMetatype",
+      "Swift.BitwiseCopyable"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.EntityQuery",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.DynamicOptionsProvider",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents._SupportsAppDependencies",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.BitwiseCopyable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "Entity",
+        "substitutedTypeName": "LureliaWidgetsExtension.LureliaCalendarEntity",
+        "substitutedMangledTypeName": "23LureliaWidgetsExtension0A14CalendarEntityV"
+      },
+      {
+        "typeAliasName": "Result",
+        "substitutedTypeName": "Swift.Array<LureliaWidgetsExtension.LureliaCalendarEntity>",
+        "substitutedMangledTypeName": "Say23LureliaWidgetsExtension0A14CalendarEntityVG"
+      },
+      {
+        "typeAliasName": "Result",
+        "substitutedTypeName": "Swift.Array<LureliaWidgetsExtension.LureliaCalendarEntity>",
+        "substitutedMangledTypeName": "Say23LureliaWidgetsExtension0A14CalendarEntityVG"
+      },
+      {
+        "typeAliasName": "DefaultValue",
+        "substitutedTypeName": "LureliaWidgetsExtension.LureliaCalendarEntity",
+        "substitutedMangledTypeName": "23LureliaWidgetsExtension0A14CalendarEntityV"
+      }
+    ],
+    "properties": []
+  },
+  {
+    "typeName": "LureliaWidgetsExtension.UpcomingEventsWidgetConfigurationIntent",
+    "mangledTypeName": "23LureliaWidgetsExtension39UpcomingEventsWidgetConfigurationIntentV",
+    "kind": "struct",
+    "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+    "line": 107,
+    "conformances": [
+      "AppIntents.WidgetConfigurationIntent",
+      "AppIntents.AppIntent",
+      "AppIntents.PersistentlyIdentifiable",
+      "AppIntents._SupportsAppDependencies",
+      "Swift.Sendable",
+      "Swift.SendableMetatype"
+    ],
+    "allConformances": [
+      {
+        "protocolName": "AppIntents.WidgetConfigurationIntent",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.AppIntent",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents.PersistentlyIdentifiable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "AppIntents._SupportsAppDependencies",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.Sendable",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      },
+      {
+        "protocolName": "Swift.SendableMetatype",
+        "conformanceDefiningModule": "LureliaWidgetsExtension"
+      }
+    ],
+    "associatedTypeAliases": [
+      {
+        "typeAliasName": "NeverResult",
+        "substitutedTypeName": "Swift.Never",
+        "substitutedMangledTypeName": "s5NeverO"
+      },
+      {
+        "typeAliasName": "PerformResult",
+        "substitutedTypeName": "Swift.Never",
+        "substitutedMangledTypeName": "s5NeverO"
+      },
+      {
+        "typeAliasName": "SummaryContent",
+        "substitutedTypeName": "some AppIntents.ParameterSummary",
+        "substitutedMangledTypeName": "10AppIntents0A6IntentPAAE16parameterSummaryQrvpZQOy23LureliaWidgetsExtension033UpcomingEventsWidgetConfigurationC0V_Qo_",
+        "opaqueTypeProtocolRequirements": [
+          "AppIntents.ParameterSummary"
+        ],
+        "opaqueTypeSameTypeRequirements": []
+      }
+    ],
+    "properties": [
+      {
+        "label": "_calendar",
+        "type": "AppIntents.IntentParameter<Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 115,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Calendar"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        }
+      },
+      {
+        "label": "title",
+        "type": "Foundation.LocalizedStringResource",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 108,
+        "valueKind": "RawLiteral",
+        "value": "Upcoming Events"
+      },
+      {
+        "label": "description",
+        "type": "AppIntents.IntentDescription",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "true",
+        "isComputed": "false",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 109,
+        "valueKind": "RawLiteral",
+        "value": "Choose which calendar the Upcoming Events widget should show. Leave blank to include every visible calendar."
+      },
+      {
+        "label": "calendar",
+        "type": "Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 115,
+        "valueKind": "InitCall",
+        "value": {
+          "type": "AppIntents.IntentParameter<Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>>",
+          "arguments": [
+            {
+              "label": "title",
+              "type": "Foundation.LocalizedStringResource",
+              "valueKind": "RawLiteral",
+              "value": "Calendar"
+            },
+            {
+              "label": "description",
+              "type": "Swift.Optional<Foundation.LocalizedStringResource>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "default",
+              "type": "Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "requestValueDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "requestDisambiguationDialog",
+              "type": "Swift.Optional<AppIntents.IntentDialog>",
+              "valueKind": "NilLiteral"
+            },
+            {
+              "label": "inputConnectionBehavior",
+              "type": "AppIntents.InputConnectionBehavior",
+              "valueKind": "Runtime"
+            }
+          ]
+        },
+        "propertyWrappers": [
+          {
+            "type": "AppIntents.IntentParameter",
+            "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+            "line": 114,
+            "arguments": [
+              {
+                "label": "title",
+                "type": "Foundation.LocalizedStringResource",
+                "valueKind": "RawLiteral",
+                "value": "Calendar"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "label": "$calendar",
+        "type": "AppIntents.IntentParameter<Swift.Optional<LureliaWidgetsExtension.LureliaCalendarEntity>>",
+        "mangledTypeName": "n/a - deprecated",
+        "isStatic": "false",
+        "isComputed": "true",
+        "file": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/UpcomingEventsWidgetConfigurationIntent.swift",
+        "line": 115,
+        "valueKind": "Runtime"
+      }
+    ]
+  }
+]

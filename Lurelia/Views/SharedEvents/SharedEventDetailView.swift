@@ -4,7 +4,7 @@
 //
 //  Full shared-event detail sheet.
 //
-//  Sections (each in a GlassCard):
+//  Shared-color sections and unframed groups for the full event experience:
 //    • Header — title, host, when/where, xmarkwavy dismiss top-right
 //    • RSVP controls
 //    • Attendees
@@ -26,6 +26,7 @@ struct SharedEventDetailView: View {
     let currentAvatarURL: String?
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @StateObject private var service = SharedEventsService.shared
     @StateObject private var live = LiveEventSubscriber()
 
@@ -62,29 +63,56 @@ struct SharedEventDetailView: View {
         return event.hostUserID == currentUserID
     }
 
+    private var sharedColor: Color {
+        Color(lureliaHex: event?.colorHex ?? initialEvent?.colorHex ?? "#03dbfc")
+    }
+
     private var uploader: TiptapMediaUploader {
         TiptapMediaUploader(baseURL: LureliaAPIConfig.baseURL)
     }
 
-    // Posts split into pinned + recent for the detail card previews.
+    private var activePosts: [EventPostDTO] {
+        var seen = Set<String>()
+        return posts.filter { post in
+            post.deletedAt == nil && seen.insert(post.id).inserted
+        }
+    }
+
+    private var activeAnnouncements: [AnnouncementDTO] {
+        var seen = Set<String>()
+        return announcements.filter { announcement in
+            announcement.deletedAt == nil && seen.insert(announcement.id).inserted
+        }
+    }
+
+    // Posts split into pinned + recent for the detail previews.
     private var pinnedPosts: [EventPostDTO] {
-        posts.filter { $0.isPinned && $0.deletedAt == nil }
+        activePosts.filter { $0.isPinned }
     }
     private var recentPosts: [EventPostDTO] {
-        posts.filter { !$0.isPinned && $0.deletedAt == nil }
+        activePosts.filter { !$0.isPinned }
             .sorted { $0.createdAt > $1.createdAt }
     }
     private var pinnedAnnouncements: [AnnouncementDTO] {
-        announcements.filter { $0.isPinned && $0.deletedAt == nil }
+        activeAnnouncements.filter { $0.isPinned }
     }
     private var recentAnnouncements: [AnnouncementDTO] {
-        announcements.filter { !$0.isPinned && $0.deletedAt == nil }
+        activeAnnouncements.filter { !$0.isPinned }
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    private var postPreviews: [EventPostDTO] {
+        Array(pinnedPosts.prefix(1)) + Array(recentPosts.prefix(2))
+    }
+
+    private var announcementPreviews: [AnnouncementDTO] {
+        Array(pinnedAnnouncements.prefix(1)) + Array(recentAnnouncements.prefix(2))
     }
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
@@ -95,22 +123,10 @@ struct SharedEventDetailView: View {
                         discussionCard
                         hostPostsCard
                         announcementsCard
-                        inviteCard(event)
-                        shareCard(event)
+                        inviteAndShareCard(event)
                         if isHost { hostToolsCard }
 
-                        SharedEventCalendarSyncCard(event: event)
-
-                        #if DEBUG
-                        SharedEventDebugPanel(
-                            eventID: eventID,
-                            currentUserID: currentUserID,
-                            currentDisplayName: currentDisplayName,
-                            onSimulated: {
-                                Task { await loadAll() }
-                            },
-                        )
-                        #endif
+                        SharedEventCalendarSyncCard(event: event, tint: sharedColor)
                     } else if isLoading {
                         loadingCard
                     } else if let err = errorMessage {
@@ -124,6 +140,7 @@ struct SharedEventDetailView: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
+        .presentationBackground(theme.palette.background)
         .task { await loadAll() }
         .task {
             _ = await SharedEventNotificationManager.shared.requestAuthorization()
@@ -142,6 +159,7 @@ struct SharedEventDetailView: View {
                 kind: .post,
                 sharedEventID: eventID,
                 currentUserID: currentUserID,
+                tint: sharedColor,
                 initialTitle: "",
                 initialMarkdown: "",
                 mediaUploader: uploader,
@@ -156,6 +174,7 @@ struct SharedEventDetailView: View {
                 kind: .announcement,
                 sharedEventID: eventID,
                 currentUserID: currentUserID,
+                tint: sharedColor,
                 initialTitle: "",
                 initialMarkdown: "",
                 mediaUploader: uploader,
@@ -174,6 +193,7 @@ struct SharedEventDetailView: View {
                 currentAvatarURL: currentAvatarURL,
                 attendees: attendees,
                 canModerate: isHost,
+                tint: sharedColor,
                 onChanged: {
                     Task { await reloadComments() }
                 },
@@ -187,6 +207,7 @@ struct SharedEventDetailView: View {
                 currentUserID: currentUserID,
                 currentDisplayName: currentDisplayName,
                 canModerate: isHost,
+                tint: sharedColor
             )
         }
         .sheet(isPresented: $showingAnnouncementList) {
@@ -197,6 +218,7 @@ struct SharedEventDetailView: View {
                 currentUserID: currentUserID,
                 currentDisplayName: currentDisplayName,
                 canModerate: isHost,
+                tint: sharedColor
             )
         }
         .sheet(item: $openedPost) { post in
@@ -251,6 +273,7 @@ struct SharedEventDetailView: View {
                 kind: .post,
                 sharedEventID: eventID,
                 currentUserID: currentUserID,
+                tint: sharedColor,
                 initialTitle: HostPostPreview.title(
                     explicit: post.title,
                     markdown: post.bodyMarkdown,
@@ -270,6 +293,7 @@ struct SharedEventDetailView: View {
                 kind: .announcement,
                 sharedEventID: eventID,
                 currentUserID: currentUserID,
+                tint: sharedColor,
                 initialTitle: HostPostPreview.title(
                     explicit: announcement.title,
                     markdown: announcement.bodyMarkdown,
@@ -314,6 +338,7 @@ struct SharedEventDetailView: View {
                 eventID: eventID,
                 currentUserID: currentUserID,
                 currentDisplayName: currentDisplayName,
+                tint: sharedColor,
                 onSent: {
                     showingInviteSheet = false
                     Task { await loadAll() }
@@ -325,69 +350,71 @@ struct SharedEventDetailView: View {
     // MARK: - Cards
 
     private func headerCard(_ event: SharedEventDTO) -> some View {
-        GlassCard(cornerRadius: 24) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(event.title)
-                            .font(.system(size: 24, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text("Hosted by \(event.hostDisplayName)")
-                            .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary)
-                    }
-                    Spacer()
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image("xmarkwavy")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 20, height: 20)
-                            .foregroundStyle(LGradients.header)
-                            .frame(width: 38, height: 38)
-                            .background(LColors.glassSurface, in: Circle())
-                            .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
-                }
-
-                Text(formatted(event.startDate))
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
-
-                if let location = event.locationName, !location.isEmpty {
-                    Text(location)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                }
-
-                if let desc = event.description, !desc.isEmpty {
-                    Text(desc)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(event.title)
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.48), radius: 2, x: 0, y: 1)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Hosted by \(event.hostDisplayName)")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.68))
                 }
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image("xmarkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 25, height: 25)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
+                        .frame(width: 38, height: 38)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
+
+            Text(formatted(event.startDate))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.36), radius: 1, x: 0, y: 1)
+
+            if let location = event.locationName, !location.isEmpty {
+                Text(location)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.68))
+            }
+
+            if let desc = event.description, !desc.isEmpty {
+                Text(desc)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(18)
+        .background {
+            BubblyCardMaterial(tint: sharedColor, cornerRadius: 24)
         }
     }
 
     private func rsvpCard(_ event: SharedEventDTO) -> some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Your RSVP")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your RSVP")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(LColors.textPrimary)
 
-                HStack(spacing: 8) {
-                    rsvpButton("Going", status: "going")
-                    rsvpButton("Interested", status: "interested")
-                    rsvpButton("Declined", status: "declined")
-                }
+            HStack(spacing: 8) {
+                rsvpButton("Going", status: "going")
+                rsvpButton("Interested", status: "interested")
+                rsvpButton("Declined", status: "declined")
             }
         }
     }
@@ -400,48 +427,48 @@ struct SharedEventDetailView: View {
         } label: {
             Text(label)
                 .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(isActive ? Color.black : theme.palette.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(
+                .background {
+                    if isActive {
+                        BubblyIconMaterial(tint: sharedColor)
+                            .clipShape(RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
+                            .fill(theme.palette.surface)
+                    }
+                }
+                .overlay {
                     RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .fill(isActive ? LColors.neutralGlassHighlight.opacity(0.12) : LColors.glassSurface2),
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .strokeBorder(
-                            isActive ? LColors.neutralPearl.opacity(0.38) : LColors.glassBorder,
-                            lineWidth: 1,
-                        ),
-                )
+                        .strokeBorder(sharedColor, lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
     }
 
     private var attendeesCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Attendees")
-                        .font(.system(size: 15, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
-                    Spacer()
-                    Text("\(attendees.filter { $0.removedAt == nil }.count)")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.accent)
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Attendees")
+                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .foregroundStyle(LColors.textPrimary)
+                Spacer()
+                Text("\(attendees.filter { $0.removedAt == nil }.count)")
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(sharedColor)
+            }
 
-                let visibleAttendees = attendees.filter { $0.removedAt == nil }
+            let visibleAttendees = attendees.filter { $0.removedAt == nil }
 
-                if visibleAttendees.isEmpty {
-                    Text("No attendees yet.")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(visibleAttendees.prefix(20)) { a in
-                            attendeeTile(a)
-                        }
+            if visibleAttendees.isEmpty {
+                Text("No attendees yet.")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.textSecondary)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(visibleAttendees.prefix(20)) { attendee in
+                        attendeeTile(attendee)
                     }
                 }
             }
@@ -474,15 +501,15 @@ struct SharedEventDetailView: View {
             Spacer(minLength: 8)
         }
         .padding(10)
-        .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(LColors.glassBorder, lineWidth: 1),
+                .strokeBorder(sharedColor, lineWidth: 1),
         )
     }
 
     private var discussionCard: some View {
-        GlassCard(cornerRadius: 20) {
+        sharedBorderedSurface(cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 10) {
                     Text("Discussion")
@@ -491,10 +518,14 @@ struct SharedEventDetailView: View {
                     Spacer()
                     Text("\(comments.count)")
                         .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.accent)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .black))
-                        .foregroundStyle(LColors.textSecondary)
+                        .foregroundStyle(sharedColor)
+                    Image("chevright")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                        .foregroundStyle(sharedColor)
+                        .bubblyIconMaterial(tint: sharedColor)
                 }
 
                 if comments.isEmpty {
@@ -547,71 +578,51 @@ struct SharedEventDetailView: View {
     // MARK: Host posts card (previews → list → rendered)
 
     private var hostPostsCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Host posts")
-                        .font(.system(size: 15, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    if isHost {
-                        Button {
-                            showingHostPostEditor = true
-                        } label: {
-                            Text("New post")
-                                .font(.system(size: 12, weight: .black, design: .rounded))
-                                .foregroundStyle(Color.white.adaptivePrimaryText)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(LGradients.header))
-                        }
-                        .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 12) {
+            sharedPostSectionHeader(title: "Host posts") {
+                showingHostPostEditor = true
+            } buttonLabel: {
+                Text("New post")
+            }
+
+            if activePosts.isEmpty {
+                Text("No posts yet.")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.textSecondary)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(postPreviews) { post in
+                        Button { openedPost = post } label: { postPreview(post) }
+                            .buttonStyle(.plain)
                     }
                 }
 
-                if posts.filter({ $0.deletedAt == nil }).isEmpty {
-                    Text("No posts yet.")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                } else {
-                    // Pinned first, then the two most recent unpinned.
-                    let previewPinned = pinnedPosts.prefix(1)
-                    let previewRecent = recentPosts.prefix(2)
-
-                    VStack(spacing: 10) {
-                        ForEach(Array(previewPinned)) { post in
-                            Button { openedPost = post } label: { postPreview(post) }
-                                .buttonStyle(.plain)
+                if activePosts.count > postPreviews.count {
+                    Button {
+                        showingPostList = true
+                    } label: {
+                        HStack {
+                            Text("See all posts")
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .foregroundStyle(LColors.textPrimary)
+                            Spacer()
+                            Image("chevright")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 14, height: 14)
+                                .foregroundStyle(sharedColor)
+                                .bubblyIconMaterial(tint: sharedColor)
                         }
-                        ForEach(Array(previewRecent)) { post in
-                            Button { openedPost = post } label: { postPreview(post) }
-                                .buttonStyle(.plain)
-                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(sharedColor, lineWidth: 1),
+                        )
                     }
-
-                    if posts.filter({ $0.deletedAt == nil }).count > (previewPinned.count + previewRecent.count) {
-                        Button {
-                            showingPostList = true
-                        } label: {
-                            HStack {
-                                Text("See all posts")
-                                    .font(.system(size: 13, weight: .black, design: .rounded))
-                                    .foregroundStyle(LColors.textPrimary)
-                                Spacer()
-                                Text("→")
-                                    .font(.system(size: 13, weight: .black, design: .rounded))
-                                    .foregroundStyle(LColors.accent)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1),
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -627,78 +638,92 @@ struct SharedEventDetailView: View {
             createdAt: post.createdAt,
             isPinned: post.isPinned,
             isAnnouncement: false,
+            tint: sharedColor
         )
     }
 
     // MARK: Announcements card
 
     private var announcementsCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Announcements")
-                        .font(.system(size: 15, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                    Spacer()
-                    if isHost {
-                        Button {
-                            showingAnnouncementEditor = true
-                        } label: {
-                            Text("Announce")
-                                .font(.system(size: 12, weight: .black, design: .rounded))
-                                .foregroundStyle(Color.white.adaptivePrimaryText)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Capsule().fill(LGradients.header))
-                        }
-                        .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 12) {
+            sharedPostSectionHeader(title: "Announcements") {
+                showingAnnouncementEditor = true
+            } buttonLabel: {
+                Text("Announce")
+            }
+
+            if activeAnnouncements.isEmpty {
+                Text("No announcements.")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(LColors.textSecondary)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(announcementPreviews) { announcement in
+                        Button { openedAnnouncement = announcement } label: { announcementPreview(announcement) }
+                            .buttonStyle(.plain)
                     }
                 }
 
-                if announcements.filter({ $0.deletedAt == nil }).isEmpty {
-                    Text("No announcements.")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                } else {
-                    let previewPinned = pinnedAnnouncements.prefix(1)
-                    let previewRecent = recentAnnouncements.prefix(2)
-
-                    VStack(spacing: 10) {
-                        ForEach(Array(previewPinned)) { announcement in
-                            Button { openedAnnouncement = announcement } label: { announcementPreview(announcement) }
-                                .buttonStyle(.plain)
+                if activeAnnouncements.count > announcementPreviews.count {
+                    Button {
+                        showingAnnouncementList = true
+                    } label: {
+                        HStack {
+                            Text("See all announcements")
+                                .font(.system(size: 13, weight: .black, design: .rounded))
+                                .foregroundStyle(LColors.textPrimary)
+                            Spacer()
+                            Image("chevright")
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 14, height: 14)
+                                .foregroundStyle(sharedColor)
+                                .bubblyIconMaterial(tint: sharedColor)
                         }
-                        ForEach(Array(previewRecent)) { announcement in
-                            Button { openedAnnouncement = announcement } label: { announcementPreview(announcement) }
-                                .buttonStyle(.plain)
-                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(sharedColor, lineWidth: 1),
+                        )
                     }
-
-                    if announcements.filter({ $0.deletedAt == nil }).count > (previewPinned.count + previewRecent.count) {
-                        Button {
-                            showingAnnouncementList = true
-                        } label: {
-                            HStack {
-                                Text("See all announcements")
-                                    .font(.system(size: 13, weight: .black, design: .rounded))
-                                    .foregroundStyle(LColors.textPrimary)
-                                Spacer()
-                                Text("→")
-                                    .font(.system(size: 13, weight: .black, design: .rounded))
-                                    .foregroundStyle(LColors.accent)
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1),
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    private func sharedPostSectionHeader<ButtonLabel: View>(
+        title: String,
+        action: @escaping () -> Void,
+        @ViewBuilder buttonLabel: () -> ButtonLabel
+    ) -> some View {
+        sharedBorderedSurface(cornerRadius: 18) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(title)
+                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                if isHost {
+                    Button(action: action) {
+                        buttonLabel()
+                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background {
+                                BubblyIconMaterial(tint: sharedColor)
+                                    .clipShape(Capsule())
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(minHeight: 32)
         }
     }
 
@@ -715,11 +740,12 @@ struct SharedEventDetailView: View {
             createdAt: announcement.createdAt,
             isPinned: announcement.isPinned,
             isAnnouncement: true,
+            tint: sharedColor
         )
     }
 
-    private func inviteCard(_ event: SharedEventDTO) -> some View {
-        GlassCard(cornerRadius: 20) {
+    private func inviteAndShareCard(_ event: SharedEventDTO) -> some View {
+        sharedBorderedSurface(cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Invite friends")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -732,19 +758,15 @@ struct SharedEventDetailView: View {
                 } label: {
                     Text("Send an invitation")
                         .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.white.adaptivePrimaryText)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(LGradients.header))
+                        .background {
+                            BubblyCardMaterial(tint: sharedColor, cornerRadius: 18)
+                        }
                 }
                 .buttonStyle(.plain)
-            }
-        }
-    }
 
-    private func shareCard(_ event: SharedEventDTO) -> some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 10) {
                 Text("Share")
                     .font(.system(size: 15, weight: .black, design: .rounded))
                     .foregroundStyle(LColors.textPrimary)
@@ -760,8 +782,8 @@ struct SharedEventDetailView: View {
                             .foregroundStyle(LColors.textPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(LColors.glassSurface2, in: Capsule())
-                            .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                            .background(theme.palette.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(sharedColor, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
 
@@ -770,10 +792,13 @@ struct SharedEventDetailView: View {
                     } label: {
                         Text("Share…")
                             .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(Color.white.adaptivePrimaryText)
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Capsule().fill(LGradients.header))
+                            .background {
+                                BubblyIconMaterial(tint: sharedColor)
+                                    .clipShape(Capsule())
+                            }
                     }
                     .buttonStyle(.plain)
 
@@ -785,8 +810,8 @@ struct SharedEventDetailView: View {
                             .foregroundStyle(LColors.textPrimary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(LColors.glassSurface2, in: Capsule())
-                            .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                            .background(theme.palette.surface, in: Capsule())
+                            .overlay(Capsule().strokeBorder(sharedColor, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -795,7 +820,7 @@ struct SharedEventDetailView: View {
     }
 
     private var hostToolsCard: some View {
-        GlassCard(cornerRadius: 20) {
+        sharedBorderedSurface(cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Host tools")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -811,10 +836,12 @@ struct SharedEventDetailView: View {
                 } label: {
                     Text("Manage event")
                         .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.white.adaptivePrimaryText)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(LGradients.header))
+                        .background {
+                            BubblyCardMaterial(tint: sharedColor, cornerRadius: 18)
+                        }
                 }
                 .buttonStyle(.plain)
 
@@ -826,8 +853,8 @@ struct SharedEventDetailView: View {
                         .foregroundStyle(LColors.textPrimary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(LColors.glassSurface2, in: Capsule())
-                        .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                        .background(theme.palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(sharedColor, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
@@ -859,14 +886,30 @@ struct SharedEventDetailView: View {
     }
 
     private var loadingCard: some View {
-        GlassCard(cornerRadius: 20) {
+        sharedBorderedSurface(cornerRadius: 20) {
             HStack {
                 Spacer()
-                ProgressView().tint(LColors.accent)
+                ProgressView().tint(sharedColor)
                 Spacer()
             }
             .padding(.vertical, 24)
         }
+    }
+
+    private func sharedBorderedSurface<Content: View>(
+        cornerRadius: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(16)
+            .background(
+                theme.palette.surface,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(sharedColor, lineWidth: 1)
+            }
     }
 
     private func avatarBubble(name: String, avatarURL: String?, size: CGFloat) -> some View {
@@ -887,7 +930,7 @@ struct SharedEventDetailView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+        .overlay(Circle().strokeBorder(sharedColor, lineWidth: 1))
     }
 
     private func resolvedAvatarURL(authorUserID: String, avatarURL: String?) -> String? {
@@ -912,7 +955,7 @@ struct SharedEventDetailView: View {
     }
 
     private func errorCard(_ err: String) -> some View {
-        GlassCard(cornerRadius: 20) {
+        sharedBorderedSurface(cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Couldn't load event")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -1111,9 +1154,11 @@ struct SharedEventInviteSheet: View {
     let eventID: String
     let currentUserID: String
     let currentDisplayName: String
+    let tint: Color
     let onSent: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @State private var recipientEmail: String = ""
     @State private var message: String = ""
     @State private var isSending = false
@@ -1121,7 +1166,8 @@ struct SharedEventInviteSheet: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 12) {
                     HStack {
@@ -1135,33 +1181,45 @@ struct SharedEventInviteSheet: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 20, height: 20)
-                                .foregroundStyle(LGradients.header)
+                                .foregroundStyle(.white)
+                                .bubblyIconMaterial(tint: .white)
                                 .frame(width: 38, height: 38)
-                                .background(LColors.glassSurface, in: Circle())
-                                .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("Close")
                     }
 
-                    GlassCard(cornerRadius: 20) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            TextField("Recipient email", text: $recipientEmail)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never)
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(LColors.textPrimary)
-                                .padding(10)
-                                .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("Recipient email", text: $recipientEmail)
+                            .textFieldStyle(.plain)
+                            .keyboardType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
+                            .padding(10)
+                            .background(
+                                theme.palette.surface,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(tint, lineWidth: 1)
+                            }
 
-                            TextField("Optional message", text: $message, axis: .vertical)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                .foregroundStyle(LColors.textPrimary)
-                                .padding(10)
-                                .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
+                        TextField("Optional message", text: $message, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.textPrimary)
+                            .padding(10)
+                            .background(
+                                theme.palette.surface,
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    .strokeBorder(tint, lineWidth: 1)
+                            }
                     }
 
                     if let err = errorMessage {
@@ -1176,10 +1234,13 @@ struct SharedEventInviteSheet: View {
                     } label: {
                         Text(isSending ? "Sending…" : "Send invitation")
                             .font(.system(size: 15, weight: .black, design: .rounded))
-                            .foregroundStyle(Color.white.adaptivePrimaryText)
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Capsule().fill(LGradients.header))
+                            .background {
+                                BubblyIconMaterial(tint: tint)
+                                    .clipShape(Capsule())
+                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(recipientEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
@@ -1189,6 +1250,7 @@ struct SharedEventInviteSheet: View {
                 .padding(.top, 16)
             }
         }
+        .presentationBackground(theme.palette.background)
     }
 
     private func send() async {

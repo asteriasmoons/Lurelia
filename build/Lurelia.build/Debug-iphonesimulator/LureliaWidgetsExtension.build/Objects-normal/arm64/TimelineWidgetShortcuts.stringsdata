@@ -1,0 +1,24 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/TimelineWidgetShortcuts.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Complete Timeline Item",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 19
+        }
+      },
+      {
+        "comment": "",
+        "key": "Skip Timeline Item",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 25
+        }
+      }
+    ]
+  },
+  "version": 1
+}

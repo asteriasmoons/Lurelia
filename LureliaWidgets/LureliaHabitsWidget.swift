@@ -415,7 +415,7 @@ struct LureliaHabitsWidgetView: View {
                 .buttonStyle(.plain)
             }
 
-            widgetIcon(habit.icon, tint: tint, size: 22)
+            materialWidgetIcon(habit.icon, tint: tint, size: 22)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(habit.title)
@@ -424,9 +424,7 @@ struct LureliaHabitsWidgetView: View {
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
-                    Text(statusLabel(for: habit))
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .foregroundStyle(statusColor(for: habit.status, tint: tint))
+                    statusText(for: habit, tint: tint)
                 }
             }
 
@@ -448,14 +446,10 @@ struct LureliaHabitsWidgetView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(tint.opacity(0.18))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(tint.opacity(0.55), lineWidth: 1)
-        )
+        .background {
+            BubblyCardMaterial(tint: tint, cornerRadius: 14)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Circle States
@@ -476,8 +470,8 @@ struct LureliaHabitsWidgetView: View {
                 let x = cos(angle) * Double(ringRadius)
                 let y = sin(angle) * Double(ringRadius)
 
-                Circle()
-                    .fill(tint.opacity(0.28))
+                BubblyIconMaterial(tint: tint.opacity(0.38))
+                    .mask { Circle() }
                     .frame(width: dotRadius * 2, height: dotRadius * 2)
                     .offset(x: x, y: y)
             }
@@ -489,8 +483,8 @@ struct LureliaHabitsWidgetView: View {
                 let x = cos(angle) * Double(ringRadius)
                 let y = sin(angle) * Double(ringRadius)
 
-                Circle()
-                    .fill(tint)
+                BubblyIconMaterial(tint: tint)
+                    .mask { Circle() }
                     .frame(width: dotRadius * 2, height: dotRadius * 2)
                     .offset(x: x, y: y)
             }
@@ -569,20 +563,81 @@ struct LureliaHabitsWidgetView: View {
     }
 
     @ViewBuilder
+    private func statusText(
+        for habit: LureliaWidgetHabitItem,
+        tint: Color
+    ) -> some View {
+        let text = Text(statusLabel(for: habit))
+            .font(.system(size: 10, weight: .black, design: .rounded))
+
+        switch habit.status {
+        case .dueNow, .soon:
+            text.bubblyIconMaterial(tint: tint)
+        default:
+            text.foregroundStyle(statusColor(for: habit.status, tint: tint))
+        }
+    }
+
+    @ViewBuilder
     private func skipIcon(size: CGFloat) -> some View {
         if let uiImage = LureliaWidgetShared.widgetIcon(for: "skipwavy") {
-            Image(uiImage: uiImage)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
+            BubblyIconMaterial(tint: LColors.neutralPearl)
+                .mask {
+                    Image(uiImage: uiImage)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                }
                 .frame(width: size, height: size)
-                .foregroundStyle(.white.opacity(0.35))
         } else {
-            Image(systemName: "forward.fill")
-                .resizable()
-                .scaledToFit()
+            BubblyIconMaterial(tint: LColors.neutralPearl)
+                .mask {
+                    Image(systemName: "forward.fill")
+                        .resizable()
+                        .scaledToFit()
+                }
                 .frame(width: size, height: size)
-                .foregroundStyle(.white.opacity(0.35))
+        }
+    }
+
+    @ViewBuilder
+    private func materialWidgetIcon(
+        _ name: String,
+        tint: Color,
+        size: CGFloat
+    ) -> some View {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let iconName = trimmedName.isEmpty ? "repeatfill" : trimmedName
+
+        if let uiImage = LureliaWidgetShared.widgetIcon(for: iconName) {
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Image(uiImage: uiImage)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                }
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
+        } else if let fallbackImage = LureliaWidgetShared.widgetIcon(for: "repeatfill") {
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Image(uiImage: fallbackImage)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                }
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
+        } else {
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Image(systemName: "repeat")
+                        .resizable()
+                        .scaledToFit()
+                }
+                .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         }
     }
 

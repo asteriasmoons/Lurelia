@@ -14,7 +14,11 @@ import SwiftUI
 struct SharedEventsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
     @Query private var settings: [UserSettings]
+
+    @AppStorage("sharedEvents.defaultColorHex")
+    private var defaultSharedEventColorHex = "#03dbfc"
 
     @StateObject private var service = SharedEventsService.shared
 
@@ -29,6 +33,7 @@ struct SharedEventsView: View {
     // Sheets.
     @State private var selection: SharedEventDTO?
     @State private var showingCreator: Bool = false
+    @State private var eventPendingDeletion: SharedEventDTO?
 
     private var settingsObject: UserSettings {
         if let existing = settings.first { return existing }
@@ -50,7 +55,8 @@ struct SharedEventsView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
+                    .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
@@ -84,7 +90,10 @@ struct SharedEventsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
         }
-        .sheet(item: $selection) { event in
+        .presentationBackground(theme.palette.background)
+        .sheet(item: $selection, onDismiss: {
+            Task { await reload() }
+        }) { event in
             SharedEventDetailView(
                 eventID: event.id,
                 initialEvent: event,
@@ -94,15 +103,36 @@ struct SharedEventsView: View {
             )
         }
         .sheet(isPresented: $showingCreator) {
-            SharedEventCreatorSheet(
+            SharedEventCreationFlow(
                 currentUserID: currentUserID,
                 currentDisplayName: currentDisplayName,
                 currentAvatarURL: currentAvatarURL,
+                initialColorHex: defaultSharedEventColorHex,
+                onColorChanged: { defaultSharedEventColorHex = $0 },
                 onCreated: { event in
                     Task { await reload() }
                     selection = event
                 },
             )
+        }
+        .confirmationDialog(
+            "Delete shared event?",
+            isPresented: Binding(
+                get: { eventPendingDeletion != nil },
+                set: { if !$0 { eventPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                guard let event = eventPendingDeletion else { return }
+                eventPendingDeletion = nil
+                Task { await deleteSharedEvent(event) }
+            }
+            Button("Cancel", role: .cancel) {
+                eventPendingDeletion = nil
+            }
+        } message: {
+            Text("This removes \(eventPendingDeletion?.title ?? "this event") from Shared Events.")
         }
         .task { await reload() }
     }
@@ -132,11 +162,11 @@ struct SharedEventsView: View {
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 20, height: 20)
-                            .foregroundStyle(LGradients.header)
+                            .frame(width: 26, height: 26)
+                            .foregroundStyle(theme.palette.indicators)
+                            .bubblyIconMaterial(tint: theme.palette.indicators)
                             .frame(width: 38, height: 38)
-                            .background(LColors.glassSurface, in: Circle())
-                            .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("New shared event")
@@ -147,11 +177,11 @@ struct SharedEventsView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .foregroundStyle(LGradients.header)
-                        .frame(width: 24, height: 24)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
+                        .frame(width: 28, height: 28)
                         .frame(width: 38, height: 38)
-                        .background(LColors.glassSurface, in: Circle())
-                        .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close shared events")
@@ -163,34 +193,40 @@ struct SharedEventsView: View {
     // MARK: - Identity setup
 
     private var identityCard: some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Set up your handle")
                     .font(.system(size: 16, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.textPrimary)
 
                 Text("Pick a display name so friends can find you in shared events. This is stored on your device and sent with each request.")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(LColors.textSecondary)
+                    .foregroundStyle(theme.palette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 TextField("Display name", text: $handleDraft)
                     .textFieldStyle(.plain)
                     .textInputAutocapitalization(.words)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.textPrimary)
                     .padding(12)
-                    .background(LColors.glassSurface2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(defaultSharedColor, lineWidth: 1)
+                    }
 
                 Button {
                     saveIdentity()
                 } label: {
                     Text("Continue")
                         .font(.system(size: 14, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.white.adaptivePrimaryText)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Capsule().fill(LGradients.header))
+                        .background {
+                            BubblyCardMaterial(tint: defaultSharedColor, cornerRadius: 18)
+                        }
                         .opacity(handleDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1)
                 }
                 .buttonStyle(.plain)
@@ -228,6 +264,18 @@ struct SharedEventsView: View {
                         row(for: event)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(role: .destructive) {
+                            eventPendingDeletion = event
+                        } label: {
+                            Label {
+                                Text("Delete")
+                            } icon: {
+                                Image("trash")
+                                    .renderingMode(.template)
+                            }
+                        }
+                    }
                 }
             }
             .padding(.horizontal, LSpacing.pageHorizontal)
@@ -235,43 +283,49 @@ struct SharedEventsView: View {
     }
 
     private func row(for event: SharedEventDTO) -> some View {
-        GlassCard(cornerRadius: 20, padding: 16) {
-            HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color(lureliaHex: event.colorHex))
-                    .frame(width: 6, height: 44)
+        let sharedColor = Color(lureliaHex: event.colorHex)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(event.title)
-                        .font(.system(size: 16, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
-                        .lineLimit(1)
-                    Text(subtitle(for: event))
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                        .lineLimit(1)
-                }
-                Spacer()
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.black.opacity(0.88))
+                .frame(width: 7, height: 48)
 
-                if let counts = event.counts {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("\(counts.going ?? 0) going")
-                            .font(.system(size: 12, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.accent)
-                        Text("\(counts.attendees ?? 0) in")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(LColors.textSecondary)
-                    }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(event.title)
+                    .font(.system(size: 16, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.42), radius: 1.5, x: 0, y: 1)
+                    .lineLimit(1)
+                Text(subtitle(for: event))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .shadow(color: .black.opacity(0.36), radius: 1, x: 0, y: 1)
+                    .lineLimit(1)
+            }
+            Spacer()
+
+            if let counts = event.counts {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(counts.going ?? 0) going")
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundStyle(.black)
+                    Text("\(counts.attendees ?? 0) in")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.68))
                 }
             }
+        }
+        .padding(16)
+        .background {
+            BubblyCardMaterial(tint: sharedColor, cornerRadius: 20)
         }
     }
 
     private var loadingCard: some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             HStack {
                 Spacer()
-                ProgressView().tint(LColors.accent)
+                ProgressView().tint(defaultSharedColor)
                 Spacer()
             }
             .padding(.vertical, 24)
@@ -280,7 +334,7 @@ struct SharedEventsView: View {
     }
 
     private var emptyCard: some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             VStack(alignment: .leading, spacing: 10) {
                 Text("No shared events yet")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -295,10 +349,12 @@ struct SharedEventsView: View {
                 } label: {
                     Text("Create a shared event")
                         .font(.system(size: 14, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.white.adaptivePrimaryText)
+                        .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Capsule().fill(LGradients.header))
+                        .background {
+                            BubblyCardMaterial(tint: defaultSharedColor, cornerRadius: 18)
+                        }
                 }
                 .buttonStyle(.plain)
             }
@@ -307,7 +363,7 @@ struct SharedEventsView: View {
     }
 
     private func errorCard(_ err: String) -> some View {
-        GlassCard(cornerRadius: 20) {
+        stateSurface {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Couldn't load shared events")
                     .font(.system(size: 15, weight: .black, design: .rounded))
@@ -319,6 +375,25 @@ struct SharedEventsView: View {
             }
         }
         .padding(.horizontal, LSpacing.pageHorizontal)
+    }
+
+    private var defaultSharedColor: Color {
+        Color(lureliaHex: defaultSharedEventColorHex)
+    }
+
+    private func stateSurface<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(16)
+            .background(
+                theme.palette.surface,
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(defaultSharedColor, lineWidth: 1)
+            }
     }
 
     private func subtitle(for event: SharedEventDTO) -> String {
@@ -337,6 +412,28 @@ struct SharedEventsView: View {
         do {
             buckets = try await service.listEvents(userID: currentUserID)
             errorMessage = nil
+        } catch {
+            errorMessage = String(describing: error)
+        }
+    }
+
+    private func deleteSharedEvent(_ event: SharedEventDTO) async {
+        do {
+            if event.hostUserID == currentUserID {
+                _ = try await service.cancelEvent(
+                    event.id,
+                    actorUserID: currentUserID,
+                    reason: "Deleted by host"
+                )
+            } else {
+                try await service.leaveEvent(event.id, userID: currentUserID)
+            }
+
+            if selection?.id == event.id {
+                selection = nil
+            }
+
+            await reload()
         } catch {
             errorMessage = String(describing: error)
         }

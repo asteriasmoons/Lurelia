@@ -32,6 +32,7 @@ enum KanbanTimelineOccurrenceKind: Hashable {
     case routine(String)
     case routineTask(String)
     case habit(String)
+    case quickTask(String)
 
     var idFragment: String {
         switch self {
@@ -39,6 +40,7 @@ enum KanbanTimelineOccurrenceKind: Hashable {
         case .routine(let id):      return "routine-\(id)"
         case .routineTask(let id):  return "routineTask-\(id)"
         case .habit(let id):        return "habit-\(id)"
+        case .quickTask(let id):    return "quickTask-\(id)"
         }
     }
 }
@@ -47,13 +49,23 @@ struct KanbanTimelineOccurrence: Identifiable {
     let card: KanbanCard
     let kind: KanbanTimelineOccurrenceKind
     let fireDate: Date
+    let column: KanbanColumn?
+
+    init(
+        card: KanbanCard,
+        kind: KanbanTimelineOccurrenceKind,
+        fireDate: Date,
+        column: KanbanColumn? = nil
+    ) {
+        self.card = card
+        self.kind = kind
+        self.fireDate = fireDate
+        self.column = column ?? card.column
+    }
 
     var id: String {
         "\(card.id.uuidString)-\(kind.idFragment)-\(fireDate.timeIntervalSince1970)"
     }
-
-    /// Convenience access to the parent column via the card relationship.
-    var column: KanbanColumn? { card.column }
 }
 
 struct KanbanTimelineColumnOccurrence: Identifiable {
@@ -84,6 +96,7 @@ enum KanbanTimelineEngine {
         allRoutines: [LureliaRoutine],
         allRoutineTasks: [LureliaRoutineTask],
         allHabits: [LureliaHabit],
+        allQuickTasks: [KanbanQuickTask] = [],
         calendar: Calendar = .current
     ) -> [KanbanTimelineOccurrence] {
         let ctx = Context(
@@ -92,7 +105,8 @@ enum KanbanTimelineEngine {
             allReminders: allReminders,
             allRoutines: allRoutines,
             allRoutineTasks: allRoutineTasks,
-            allHabits: allHabits
+            allHabits: allHabits,
+            allQuickTasks: allQuickTasks
         )
 
         var result: [KanbanTimelineOccurrence] = []
@@ -106,7 +120,8 @@ enum KanbanTimelineEngine {
                         KanbanTimelineOccurrence(
                             card: card,
                             kind: kind,
-                            fireDate: fireDate
+                            fireDate: fireDate,
+                            column: column
                         )
                     )
                 }
@@ -134,6 +149,7 @@ enum KanbanTimelineEngine {
         allRoutines: [LureliaRoutine],
         allRoutineTasks: [LureliaRoutineTask],
         allHabits: [LureliaHabit],
+        allQuickTasks: [KanbanQuickTask] = [],
         calendar: Calendar = .current
     ) -> [KanbanTimelineColumnOccurrence] {
         let raw = occurrences(
@@ -143,6 +159,7 @@ enum KanbanTimelineEngine {
             allRoutines: allRoutines,
             allRoutineTasks: allRoutineTasks,
             allHabits: allHabits,
+            allQuickTasks: allQuickTasks,
             calendar: calendar
         )
 
@@ -176,11 +193,13 @@ enum KanbanTimelineEngine {
         let allRoutines: [LureliaRoutine]
         let allRoutineTasks: [LureliaRoutineTask]
         let allHabits: [LureliaHabit]
+        let allQuickTasks: [KanbanQuickTask]
 
         let remindersByID: [String: LureliaReminder]
         let routinesByID: [String: LureliaRoutine]
         let habitsByKanbanID: [String: LureliaHabit]
         let routineTasksByKanbanID: [String: LureliaRoutineTask]
+        let quickTasksByKanbanID: [String: KanbanQuickTask]
         let startOfSelectedDay: Date
         let timelineStart: Date
         let timelineEnd: Date
@@ -192,7 +211,8 @@ enum KanbanTimelineEngine {
             allReminders: [LureliaReminder],
             allRoutines: [LureliaRoutine],
             allRoutineTasks: [LureliaRoutineTask],
-            allHabits: [LureliaHabit]
+            allHabits: [LureliaHabit],
+            allQuickTasks: [KanbanQuickTask]
         ) {
             self.selectedDay = selectedDay
             self.calendar = calendar
@@ -200,6 +220,7 @@ enum KanbanTimelineEngine {
             self.allRoutines = allRoutines
             self.allRoutineTasks = allRoutineTasks
             self.allHabits = allHabits
+            self.allQuickTasks = allQuickTasks
 
             self.remindersByID = Dictionary(
                 uniqueKeysWithValues: allReminders.map { ($0.id.uuidString, $0) }
@@ -213,6 +234,10 @@ enum KanbanTimelineEngine {
             )
             self.routineTasksByKanbanID = Dictionary(
                 allRoutineTasks.map { ($0.kanbanItemID, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            self.quickTasksByKanbanID = Dictionary(
+                allQuickTasks.map { ($0.kanbanItemID, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
 
@@ -239,6 +264,8 @@ enum KanbanTimelineEngine {
             return routineTaskFireDates(for: card, in: ctx)
         case .habit:
             return habitFireDates(for: card, in: ctx)
+        case .quickTask:
+            return quickTaskFireDates(for: card, in: ctx)
         }
     }
 
@@ -256,7 +283,25 @@ enum KanbanTimelineEngine {
             return .routineTask(resolved)
         case .habit:
             return .habit(card.itemID)
+        case .quickTask:
+            return .quickTask(card.itemID)
         }
+    }
+
+    // MARK: - Quick Tasks
+
+    private static func quickTaskFireDates(
+        for card: KanbanCard,
+        in ctx: Context
+    ) -> [Date] {
+        guard let task = ctx.quickTasksByKanbanID[card.itemID],
+              let fireDate = task.timelineDate(calendar: ctx.calendar),
+              ctx.calendar.isDate(fireDate, inSameDayAs: ctx.selectedDay)
+        else {
+            return []
+        }
+
+        return [fireDate]
     }
 
     // MARK: - Reminders

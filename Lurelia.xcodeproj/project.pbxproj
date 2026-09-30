@@ -37,7 +37,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		CF2170A62FD9C6AD00060F38 /* LureliaWidgetsExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LureliaWidgetsExtension.entitlements; sourceTree = "<group>"; };
 		CFBD95192FB8CE18003F1EAC /* Lurelia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lurelia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFBD955A2FB90690003F1EAC /* LureliaWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LureliaWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CFBD955C2FB90690003F1EAC /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
@@ -101,6 +100,9 @@
 				Models/Shared/SharedEventEnums.swift,
 				Models/Shared/SyncState.swift,
 				Models/UserSettings.swift,
+				Theme/AppTheme.swift,
+				Theme/BubblyCardMaterial.swift,
+				Theme/BubblyIconMaterial.swift,
 				Theme/LureliaComponents.swift,
 				Theme/Theme.swift,
 				Utilities/KanbanTimelineEngine.swift,
@@ -176,7 +178,6 @@
 		CFBD95102FB8CE18003F1EAC = {
 			isa = PBXGroup;
 			children = (
-				CF2170A62FD9C6AD00060F38 /* LureliaWidgetsExtension.entitlements */,
 				CFBD951B2FB8CE18003F1EAC /* Lurelia */,
 				CFBD95602FB90690003F1EAC /* LureliaWidgets */,
 				CFBD955B2FB90690003F1EAC /* Frameworks */,

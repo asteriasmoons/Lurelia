@@ -3,9 +3,9 @@
 //  Lurelia
 //
 //  The routine-task template library. Search, empty state, and a scroll of
-//  neutral template cards. Tapping a card opens a full detail
+//  color-rotating template cards. Tapping a card opens a full detail
 //  preview (`RoutineTaskTemplateDetailView`). Every surface uses
-//  Lurelia's neutral glass tokens so templates do not imply a routine color.
+//  Lurelia's material system without implying a routine color.
 //
 
 import SwiftData
@@ -15,6 +15,7 @@ import UIKit
 struct RoutineTaskTemplateLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Query(sort: \RoutineTaskTemplate.updatedDate, order: .reverse)
     private var templates: [RoutineTaskTemplate]
@@ -100,6 +101,7 @@ struct RoutineTaskTemplateLibraryView: View {
             .sheet(item: $previewTemplate) { template in
                 RoutineTaskTemplateDetailView(
                     template: template,
+                    tint: templateTint(for: template),
                     onUse: { useTemplate = template },
                     onEdit: { editingTemplate = template }
                 )
@@ -135,11 +137,11 @@ struct RoutineTaskTemplateLibraryView: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 17, height: 17)
-                    .foregroundStyle(LColors.textPrimary)
-                    .frame(width: 40, height: 40)
-                    .background(LColors.glassSurface2, in: Circle())
-                    .overlay { Circle().strokeBorder(LColors.glassBorder, lineWidth: 1) }
+                    .frame(width: 26, height: 26)
+                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
@@ -149,14 +151,19 @@ struct RoutineTaskTemplateLibraryView: View {
     // MARK: - Search + count
 
     private var searchField: some View {
-        neutralTemplateCard(cornerRadius: 18, padding: 12) {
+        neutralTemplateCard(
+            cornerRadius: 18,
+            padding: 12,
+            borderColor: theme.palette.primaryAction
+        ) {
             HStack(spacing: 10) {
                 Image("cardlines")
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 16, height: 16)
-                    .foregroundStyle(LColors.textSecondary)
+                    .foregroundStyle(theme.palette.primaryAction)
+                    .bubblyIconMaterial(tint: theme.palette.primaryAction)
 
                 TextField("Search templates", text: $searchText)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -194,17 +201,29 @@ struct RoutineTaskTemplateLibraryView: View {
     // MARK: - Template card
 
     private func templateCard(_ template: RoutineTaskTemplate) -> some View {
-        Button {
+        let accent = templateTint(for: template)
+
+        return Button {
             previewTemplate = template
         } label: {
-            neutralTemplateCard {
+            neutralTemplateCard(borderColor: accent) {
                 HStack(spacing: 12) {
                     ZStack {
-                        Circle().fill(LColors.glassSurface2).frame(width: 48, height: 48)
-                        Circle().strokeBorder(LColors.glassBorder.opacity(0.32), lineWidth: 1).frame(width: 48, height: 48)
-                        LureliaIconView(iconId: template.icon.isEmpty ? "sparkle" : template.icon, size: 22)
-                            .foregroundStyle(LColors.textSecondary)
+                        Circle()
+                            .fill(Color.black.opacity(0.72))
+
+                        Circle()
+                            .strokeBorder(accent, lineWidth: 1.5)
+                            .bubblyIconMaterial(tint: accent)
+
+                        LureliaIconView(
+                            iconId: template.icon.isEmpty ? "sparkle" : template.icon,
+                            size: 25
+                        )
+                        .foregroundStyle(accent)
+                        .bubblyIconMaterial(tint: accent)
                     }
+                    .frame(width: 50, height: 50)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(template.title.isEmpty ? "Untitled Template" : template.title)
@@ -231,11 +250,11 @@ struct RoutineTaskTemplateLibraryView: View {
                             .renderingMode(.template)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 14, height: 14)
-                            .foregroundStyle(LColors.textSecondary)
+                            .frame(width: 16, height: 16)
+                            .foregroundStyle(theme.palette.primaryAction)
+                            .bubblyIconMaterial(tint: theme.palette.primaryAction)
                             .frame(width: 34, height: 34)
-                            .background(LColors.glassSurface2, in: Circle())
-                            .overlay(Circle().strokeBorder(LColors.glassBorder.opacity(0.32), lineWidth: 1))
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Delete template")
@@ -244,8 +263,9 @@ struct RoutineTaskTemplateLibraryView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 12, height: 12)
-                        .foregroundStyle(LColors.textSecondary)
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(theme.palette.primaryAction)
+                        .bubblyIconMaterial(tint: theme.palette.primaryAction)
                 }
             }
         }
@@ -264,6 +284,16 @@ struct RoutineTaskTemplateLibraryView: View {
             if !trimmed.isEmpty { return trimmed }
         }
         return ""
+    }
+
+    private func templateTint(for template: RoutineTaskTemplate) -> Color {
+        let index = templates.firstIndex(where: { $0.id == template.id }) ?? 0
+        let rotation = [
+            theme.palette.primaryAction,
+            theme.palette.secondaryAccent,
+            theme.palette.indicators
+        ]
+        return rotation[index % rotation.count]
     }
 
     // MARK: - Empty states
@@ -326,14 +356,15 @@ struct RoutineTaskTemplateLibraryView: View {
         }
     }
 
-    // MARK: - Neutral card helper
+    // MARK: - Card helper
 
-    /// Neutral card wrapper for this library. Templates are reusable
-    /// blueprints, so they stay visually separate from user routine colors.
+    /// Surface wrapper for this library. Callers can provide a semantic
+    /// border while preserving the same neutral template surface.
     @ViewBuilder
     private func neutralTemplateCard<Content: View>(
         cornerRadius: CGFloat = 22,
         padding: CGFloat = 16,
+        borderColor: Color? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         content()
@@ -341,11 +372,14 @@ struct RoutineTaskTemplateLibraryView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(LColors.glassSurface2)
+                    .fill(theme.palette.surface)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(LColors.glassBorder.opacity(0.32), lineWidth: 1)
+                    .strokeBorder(
+                        borderColor ?? LColors.glassBorder.opacity(0.32),
+                        lineWidth: 1
+                    )
             }
     }
 

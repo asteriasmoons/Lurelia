@@ -30,7 +30,7 @@ enum LureliaTab: CaseIterable {
 
     static let overflowTabs: [LureliaTab] = [
         .reminders,
-        .journeys,
+        // .journeys,
         .profile,
         .schedule
     ]
@@ -211,6 +211,8 @@ private extension View {
 struct LureliaTabBar: View {
     @Binding var selectedTab: LureliaTab
 
+    @Environment(\.appTheme) private var theme
+
     @State private var showMoreTabs = false
 
     private var primaryTabs: [LureliaTab] {
@@ -244,7 +246,12 @@ struct LureliaTabBar: View {
             .padding(.top, 10)
             .padding(.bottom, 10)
             .background {
-                LureliaNeutralGlassSurface(cornerRadius: 999, prominence: .surface)
+                Capsule()
+                    .fill(theme.palette.background)
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
+                    }
             }
             .padding(.horizontal, 18)
             .padding(.bottom, 42)
@@ -252,15 +259,8 @@ struct LureliaTabBar: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.82), value: showMoreTabs)
     }
 
-    @ViewBuilder
     private var tabControlRow: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 10) {
-                tabControls
-            }
-        } else {
-            tabControls
-        }
+        tabControls
     }
 
     private var tabControls: some View {
@@ -278,7 +278,7 @@ struct LureliaTabBar: View {
     }
 
     private func tabButton(_ tab: LureliaTab) -> some View {
-        let isSelected = selectedTab == tab
+        let tint = tabTint(for: tab)
 
         return Button {
             withAnimation(.spring(duration: 0.3, bounce: 0.2)) {
@@ -286,30 +286,14 @@ struct LureliaTabBar: View {
                 showMoreTabs = false
             }
         } label: {
-            ZStack {
-                if isSelected {
-                    Circle()
-                        .fill(LColors.neutralGlassHighlight.opacity(0.045))
-                        .frame(width: 34, height: 34)
-
-                    Circle()
-                        .strokeBorder(LGradients.header.opacity(0.72), lineWidth: 1.2)
-                        .frame(width: 34, height: 34)
-                }
-
-                Image(tab.icon)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 22, height: 22)
-                    .foregroundStyle(
-                        isSelected
-                        ? AnyShapeStyle(LGradients.header)
-                        : AnyShapeStyle(Color.white.opacity(0.4))
-                    )
-            }
-            .frame(width: 42, height: 34)
-            .contentShape(Rectangle())
+            Image(tab.icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 22, height: 22)
+                .bubblyIconMaterial(tint: tint)
+                .frame(width: 42, height: 34)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -320,36 +304,41 @@ struct LureliaTabBar: View {
                 showMoreTabs.toggle()
             }
         } label: {
-            ZStack {
-                Circle()
-                    .fill(LColors.neutralGlassHighlight.opacity(showMoreTabs ? 0.08 : 0.04))
-                    .overlay {
-                        Circle()
-                            .strokeBorder(LGradients.header.opacity(showMoreTabs ? 0.78 : 0.36), lineWidth: 1.2)
-                    }
-                    .frame(width: 44, height: 44)
-
-                Image("addwavy")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .foregroundStyle(LGradients.header)
-                    .rotationEffect(.degrees(showMoreTabs ? 45 : 0))
-            }
-            .frame(width: 54, height: 42)
-            .contentShape(Rectangle())
+            Image("addwavy")
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .bubblyIconMaterial(tint: theme.palette.indicators)
+                .rotationEffect(.degrees(showMoreTabs ? 45 : 0))
+                .frame(width: 54, height: 42)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(overflowTabs.isEmpty)
         .opacity(overflowTabs.isEmpty ? 0.45 : 1)
     }
 
+    private func tabTint(for tab: LureliaTab) -> Color {
+        guard let tabIndex = primaryTabs.firstIndex(of: tab) else {
+            return theme.palette.primaryAction
+        }
+
+        let displayedIndex = tabIndex < 2 ? tabIndex : tabIndex + 1
+        let rotation = theme.palette.rotation
+        return rotation[displayedIndex % rotation.count]
+    }
+
     private var moreTabsMenu: some View {
         moreTabsContent
         .padding(10)
         .background {
-            LureliaNeutralGlassSurface(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(theme.palette.background)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .strokeBorder(theme.palette.primaryAction, lineWidth: 1)
+                }
         }
     }
 
@@ -370,31 +359,16 @@ struct LureliaTabBar: View {
     }
 
     private func moreTabRow(_ tab: LureliaTab) -> some View {
-        HStack(spacing: 12) {
+        let tint = overflowTabTint(for: tab)
+
+        return HStack(spacing: 12) {
             Image(tab.icon)
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 18, height: 18)
-                .foregroundStyle(
-                    selectedTab == tab
-                    ? AnyShapeStyle(LGradients.header)
-                    : AnyShapeStyle(Color.white.opacity(0.58))
-                )
+                .bubblyIconMaterial(tint: tint)
                 .frame(width: 34, height: 34)
-                .background {
-                    Circle()
-                        .fill(LColors.neutralGlassHighlight.opacity(selectedTab == tab ? 0.055 : 0.035))
-                        .overlay {
-                            Circle()
-                                .strokeBorder(
-                                    selectedTab == tab
-                                    ? AnyShapeStyle(LGradients.header.opacity(0.52))
-                                    : AnyShapeStyle(LColors.neutralGlassHighlight.opacity(0.14)),
-                                    lineWidth: 1
-                                )
-                        }
-                    }
 
             Text(tab.title)
                 .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -414,6 +388,15 @@ struct LureliaTabBar: View {
                     }
             }
         }
+    }
+
+    private func overflowTabTint(for tab: LureliaTab) -> Color {
+        guard let tabIndex = overflowTabs.firstIndex(of: tab) else {
+            return theme.palette.primaryAction
+        }
+
+        let rotation = theme.palette.rotation
+        return rotation[tabIndex % rotation.count]
     }
 }
 

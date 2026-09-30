@@ -6,11 +6,14 @@
 import SwiftUI
 
 struct LureliaMonthCalendarView: View {
+    @Environment(\.appTheme) private var theme
+
     @Binding var focusedDate: Date
     let localOccurrences: [LureliaEventOccurrence]
     let externalOccurrences: [LureliaExternalCalendarOccurrence]
     let events: [LureliaEvent]
     let onSelect: (LureliaEventUnifiedOccurrence) -> Void
+    let onDelete: (LureliaEventUnifiedOccurrence) -> Void
 
     @State private var selectedDay = Date()
     private let calendar = Calendar.current
@@ -20,14 +23,21 @@ struct LureliaMonthCalendarView: View {
         VStack(spacing: 12) {
             HStack {
                 Button { moveMonth(-1) } label: {
-                    Image("chevleft")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 18, height: 18)
-                        .foregroundStyle(LGradients.header)
+                    ZStack {
+                        Color.clear
+
+                        Image("chevleft")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                            .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                    }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Previous month")
 
                 Spacer()
 
@@ -38,14 +48,21 @@ struct LureliaMonthCalendarView: View {
                 Spacer()
 
                 Button { moveMonth(1) } label: {
-                    Image("chevright")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 18, height: 18)
-                        .foregroundStyle(LGradients.header)
+                    ZStack {
+                        Color.clear
+
+                        Image("chevright")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                            .bubblyIconMaterial(tint: theme.palette.secondaryAccent)
+                    }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Next month")
             }
             .padding(.horizontal, 24)
 
@@ -76,7 +93,11 @@ struct LureliaMonthCalendarView: View {
                 } else {
                     VStack(spacing: 10) {
                         ForEach(rows) { row in
-                            LureliaEventOccurrenceRow(row: row, onSelect: onSelect)
+                            LureliaEventOccurrenceRow(
+                                row: row,
+                                onSelect: onSelect,
+                                onDelete: onDelete
+                            )
                         }
                     }
                     .padding(.horizontal, 24)
@@ -124,37 +145,61 @@ struct LureliaMonthCalendarView: View {
         let isCurrentMonth = calendar.isDate(day, equalTo: focusedDate, toGranularity: .month)
         let isSelected = calendar.isDate(day, inSameDayAs: selectedDay)
         let dayRows = rows(on: day)
+        let accent = dayAccent(for: day)
 
         return Button {
             selectedDay = day
             focusedDate = day
         } label: {
-            GlassCard(cornerRadius: 14, padding: 7) {
-                VStack(spacing: 5) {
-                    Text("\(calendar.component(.day, from: day))")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(isCurrentMonth ? .white : LColors.textSecondary.opacity(0.45))
-                        .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(spacing: 5) {
+                Text("\(calendar.component(.day, from: day))")
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(
+                        isSelected
+                        ? Color.white
+                        : (isCurrentMonth ? theme.palette.textPrimary : theme.palette.textSecondary.opacity(0.45))
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                    VStack(spacing: 3) {
-                        ForEach(dayRows.prefix(3)) { row in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(row.color.opacity(row.isApple ? 0.55 : 0.9))
-                                .frame(height: 5)
-                        }
+                VStack(spacing: 3) {
+                    ForEach(dayRows.prefix(3)) { row in
+                        let stripTint = row.color.opacity(row.isApple ? 0.55 : 0.9)
+
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(stripTint)
+                            .frame(height: 5)
+                            .bubblyIconMaterial(tint: stripTint, isEnabled: !isSelected)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 19, alignment: .top)
                 }
-                .frame(height: 50)
+                .frame(maxWidth: .infinity, minHeight: 19, alignment: .top)
+            }
+            .frame(height: 50)
+            .padding(7)
+            .background {
+                if isSelected {
+                    BubblyIconMaterial(tint: accent)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(theme.palette.surface)
+                }
             }
             .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.85), lineWidth: 1.5)
-                }
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(
+                        isSelected ? accent : theme.palette.textPrimary.opacity(0.12),
+                        lineWidth: 1
+                    )
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func dayAccent(for day: Date) -> Color {
+        let weekdayIndex = max(0, calendar.component(.weekday, from: day) - 1)
+        let rotation = theme.palette.rotation
+        guard !rotation.isEmpty else { return theme.palette.secondaryAccent }
+        return rotation[weekdayIndex % rotation.count]
     }
 
     private func rows(on day: Date) -> [LureliaEventUnifiedOccurrence] {

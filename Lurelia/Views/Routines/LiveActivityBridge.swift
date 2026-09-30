@@ -37,7 +37,8 @@ final class LureliaLiveActivityBridge {
             return
         }
         
-        let endDate = endDateFor(routine: routine, run: run)
+        let stateDate = Date()
+        let endDate = endDateFor(routine: routine, run: run, at: stateDate)
         
         let state = LureliaRoutineActivityAttributes.ContentState(
             routineName: routine.name,
@@ -45,7 +46,11 @@ final class LureliaLiveActivityBridge {
             totalCount: run.totalCount,
             endDate: endDate,
             isFinished: run.allDone,
-            colorHex: routine.colorHex
+            colorHex: routine.colorHex,
+            isPaused: run.isPaused,
+            pausedRemainingSeconds: run.isPaused
+                ? max(0, endDate.timeIntervalSince(stateDate))
+                : nil
         )
         
         let attributes = LureliaRoutineActivityAttributes(
@@ -54,7 +59,7 @@ final class LureliaLiveActivityBridge {
         
         let content = ActivityContent(
             state: state,
-            staleDate: endDate.addingTimeInterval(300)
+            staleDate: run.isPaused ? nil : endDate.addingTimeInterval(300)
         )
 
         if let existingActivity = existingActivity(for: routine) {
@@ -98,7 +103,8 @@ final class LureliaLiveActivityBridge {
 
         currentActivity = activity
         
-        let endDate = endDateFor(routine: routine, run: run)
+        let stateDate = Date()
+        let endDate = endDateFor(routine: routine, run: run, at: stateDate)
         
         let state = LureliaRoutineActivityAttributes.ContentState(
             routineName: routine.name,
@@ -106,12 +112,16 @@ final class LureliaLiveActivityBridge {
             totalCount: run.totalCount,
             endDate: endDate,
             isFinished: run.allDone,
-            colorHex: routine.colorHex
+            colorHex: routine.colorHex,
+            isPaused: run.isPaused,
+            pausedRemainingSeconds: run.isPaused
+                ? max(0, endDate.timeIntervalSince(stateDate))
+                : nil
         )
         
         let content = ActivityContent(
             state: state,
-            staleDate: endDate.addingTimeInterval(300)
+            staleDate: run.isPaused ? nil : endDate.addingTimeInterval(300)
         )
         
         Task {
@@ -149,10 +159,11 @@ final class LureliaLiveActivityBridge {
     
     private func endDateFor(
         routine: LureliaRoutine,
-        run: LureliaRoutineRun
+        run: LureliaRoutineRun,
+        at date: Date
     ) -> Date {
         let startedAt = run.startedAt
-        let pausedSeconds = run.totalPausedSeconds
+        let pausedSeconds = run.pausedDuration(at: date)
 
         let calendar = Calendar.current
 
@@ -183,7 +194,7 @@ final class LureliaLiveActivityBridge {
                     .addingTimeInterval(pausedSeconds)
             }
 
-            return scheduledEnd
+            return scheduledEnd.addingTimeInterval(pausedSeconds)
         }
 
         if routine.durationMode {

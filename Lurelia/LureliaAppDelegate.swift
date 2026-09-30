@@ -3,6 +3,7 @@
 //  Lurelia
 //
 
+import CloudKit
 import UIKit
 import UserNotifications
 import SwiftData
@@ -17,6 +18,7 @@ class LureliaAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     ) -> Bool {
         LureliaAppDelegate.shared = self
         UNUserNotificationCenter.current().delegate = self
+        Task { await LureliaReportConversationNotificationManager.prepareNotifications() }
         return true
     }
 
@@ -45,6 +47,31 @@ class LureliaAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void,
     ) {
+        // Voxiverse report-conversation pushes: invitations arrive as public-database
+        // query pushes; conversation messages arrive as ReportConversations zone pushes.
+        // Route these first (downstream sourceAppID + senderRole + dedup filters keep
+        // this app-specific and prevent historical replay); everything else is the
+        // shared-event platform path.
+        if let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) {
+            if notification.subscriptionID == "lurelia-report-invitations-v3",
+               let recordID = (notification as? CKQueryNotification)?.recordID {
+                Task {
+                    let notified = await LureliaReportConversationNotificationManager.processInvitation(recordID: recordID)
+                    NotificationCenter.default.post(name: LureliaReportConversationNotificationManager.conversationDataDidChange, object: nil)
+                    completionHandler(notified ? .newData : .noData)
+                }
+                return
+            } else if let zoneNotification = notification as? CKRecordZoneNotification,
+                      let zoneID = zoneNotification.recordZoneID,
+                      zoneID.zoneName == LureliaReportConversationCloudKitSchema.zoneName {
+                Task {
+                    let notified = await LureliaReportConversationNotificationManager.processMessageChanges(in: zoneID, databaseScope: zoneNotification.databaseScope)
+                    NotificationCenter.default.post(name: LureliaReportConversationNotificationManager.conversationDataDidChange, object: nil)
+                    completionHandler(notified ? .newData : .noData)
+                }
+                return
+            }
+        }
         Task { @MainActor in
             SharedEventNotificationManager.shared.presentForeground(userInfo: userInfo)
             completionHandler(.newData)
@@ -66,6 +93,18 @@ class LureliaAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     ) {
         let actionID = response.actionIdentifier
         let userInfo = response.notification.request.content.userInfo
+
+        // Voxiverse report-conversation tap: open the matching conversation.
+        if let kind = userInfo["kind"] as? String,
+           kind == "reportConversationReply" || kind == "reportConversationInvitation",
+           let reportID = userInfo["reportID"] as? String, !reportID.isEmpty {
+            NotificationCenter.default.post(
+                name: LureliaReportConversationNotificationManager.conversationNotificationOpened,
+                object: reportID
+            )
+            completionHandler()
+            return
+        }
 
         // Habit notification actions
         if userInfo["habitID"] != nil,

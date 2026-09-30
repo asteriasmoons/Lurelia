@@ -82,6 +82,8 @@ struct ObstacleDraft: Identifiable, Hashable {
 // MARK: - Shared Form
 
 struct RoutineTaskFieldsForm: View {
+    @Environment(\.appTheme) private var theme
+
     /// Accent shape style used for fills, strokes, and icon tints. This is the
     /// brand gradient during routine creation (no routine color exists yet) and
     /// the routine's own tint color when editing an existing routine's task.
@@ -134,15 +136,11 @@ struct RoutineTaskFieldsForm: View {
     private let placePresets = ["Bedroom", "Bathroom", "Kitchen", "Office", "Car", "Living Room", "Gym", "Outdoors"]
 
     private var textColor: Color {
-        .white.opacity(0.92)
+        theme.palette.textPrimary
     }
 
     private var secondaryTextColor: Color {
-        .white.opacity(0.72)
-    }
-
-    private var accentFillTextColor: Color {
-        accentColor.wcagContrastingTextColor
+        theme.palette.textSecondary
     }
 
     var body: some View {
@@ -195,8 +193,16 @@ struct RoutineTaskFieldsForm: View {
         toggleCard(title: "Set a due time", subtitle: "Give this task its own time", isOn: $hasDueTime, icon: "ringstarcal")
 
         if hasDueTime {
-            fieldCard(title: "Due Time") {
-                LureliaTintedTimeDrumPicker(hour: $dueHour, minute: $dueMinute, tint: LColors.neutralSilver)
+            VStack(alignment: .leading, spacing: 8) {
+                fieldLabel("Due Time")
+
+                LureliaTintedTimeDrumPicker(
+                    hour: $dueHour,
+                    minute: $dueMinute,
+                    tint: accentColor,
+                    usesCardMaterial: true,
+                    usesDarkTypography: true
+                )
             }
         }
 
@@ -205,7 +211,9 @@ struct RoutineTaskFieldsForm: View {
             subtitle: "Minutes",
             value: $estimatedDuration,
             range: 0...600,
-            step: 1
+            step: 1,
+            tint: accentColor,
+            usesRoutineMaterialStyle: true
         )
 
         toggleCard(title: "Repeat on days", subtitle: "Choose which days this applies", isOn: $repeatsOnDays, icon: "repeatfill")
@@ -256,7 +264,8 @@ struct RoutineTaskFieldsForm: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 16, height: 16)
-                        .foregroundStyle(accent)
+                        .foregroundStyle(accentColor)
+                        .bubblyIconMaterial(tint: accentColor)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Sound")
@@ -264,7 +273,7 @@ struct RoutineTaskFieldsForm: View {
                             .foregroundStyle(textColor)
                         Text(LureliaReminderAlarmSound.sound(named: alarmSoundName).displayName)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(secondaryTextColor)
                     }
 
                     Spacer()
@@ -274,14 +283,15 @@ struct RoutineTaskFieldsForm: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
-                        .foregroundStyle(accent)
+                        .foregroundStyle(accentColor)
+                        .bubblyIconMaterial(tint: accentColor)
                         .rotationEffect(.degrees(soundsExpanded ? 90 : 0))
                 }
                 .padding(14)
-                .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                        .strokeBorder(accentColor, lineWidth: 1)
                 }
             }
             .buttonStyle(.plain)
@@ -308,7 +318,7 @@ struct RoutineTaskFieldsForm: View {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
-                            .strokeBorder(isSelected ? AnyShapeStyle(accent) : AnyShapeStyle(Color.white.opacity(0.25)), lineWidth: 1.5)
+                            .strokeBorder(isSelected ? AnyShapeStyle(accent) : AnyShapeStyle(theme.palette.textSecondary.opacity(0.35)), lineWidth: 1.5)
                             .frame(width: 18, height: 18)
                         if isSelected {
                             Circle().fill(accent).frame(width: 10, height: 10)
@@ -317,7 +327,7 @@ struct RoutineTaskFieldsForm: View {
 
                     Text(sound.displayName)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(isSelected ? textColor : .white.opacity(0.75))
+                        .foregroundStyle(isSelected ? textColor : secondaryTextColor)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
@@ -333,23 +343,22 @@ struct RoutineTaskFieldsForm: View {
                     .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 14, height: 14)
+                    .frame(width: 28, height: 28)
                     .foregroundStyle(accentColor)
+                    .bubblyIconMaterial(tint: accentColor)
                     .frame(width: 34, height: 34)
-                    .background(Color.white.opacity(0.06), in: Circle())
-                    .overlay(Circle().strokeBorder(accentColor.opacity(0.4), lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(
-            isSelected ? AnyShapeStyle(accent.opacity(0.14)) : AnyShapeStyle(Color.white.opacity(0.05)),
+            isSelected ? AnyShapeStyle(accentColor.opacity(0.14)) : AnyShapeStyle(theme.palette.surface),
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(isSelected ? AnyShapeStyle(accent.opacity(0.5)) : AnyShapeStyle(Color.white.opacity(0.1)), lineWidth: 1)
+                .strokeBorder(isSelected ? AnyShapeStyle(accentColor) : AnyShapeStyle(theme.palette.textPrimary.opacity(0.1)), lineWidth: 1)
         )
     }
 
@@ -372,7 +381,7 @@ struct RoutineTaskFieldsForm: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("TRIGGER TYPE")
                 .font(.system(size: 10, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(theme.palette.textSecondary)
             triggerTypeGrid
         }
 
@@ -431,19 +440,23 @@ struct RoutineTaskFieldsForm: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 15, height: 15)
+                            .foregroundStyle(.black)
                     }
 
                     Text(isFillingDetails ? "Filling Details" : "Fill Details")
                         .font(.system(size: 14, weight: .black, design: .rounded))
                 }
                 .foregroundStyle(fillDetailsButtonTextColor)
-                .wcagContrastLift(on: accentColor, isActive: canFillDetails)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
-                .background(
-                    canFillDetails ? accent : AnyShapeStyle(Color.white.opacity(0.12)),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
+                .background {
+                    if canFillDetails {
+                        BubblyCardMaterial(tint: accentColor, cornerRadius: 16)
+                    } else {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(theme.palette.raisedSurface)
+                    }
+                }
             }
             .buttonStyle(.plain)
             .disabled(!canFillDetails)
@@ -462,7 +475,7 @@ struct RoutineTaskFieldsForm: View {
     }
 
     private var fillDetailsButtonTextColor: Color {
-        canFillDetails ? accentColor.wcagContrastingSolidTextColor : .white.opacity(0.45)
+        canFillDetails ? .black : theme.palette.textSecondary.opacity(0.45)
     }
 
     private func dismissKeyboard() {
@@ -561,10 +574,11 @@ struct RoutineTaskFieldsForm: View {
         Button { showIconPicker = true } label: {
             HStack(spacing: 12) {
                 ZStack {
-                    Circle().fill(Color.white.opacity(0.08)).frame(width: 48, height: 48)
+                    Circle().fill(theme.palette.raisedSurface).frame(width: 48, height: 48)
                     Circle().strokeBorder(accent.opacity(0.85), lineWidth: 1)
                     LureliaIconView(iconId: selectedIcon, size: 23)
-                        .foregroundStyle(accent)
+                        .foregroundStyle(accentColor)
+                        .bubblyIconMaterial(tint: accentColor)
                 }
                 .frame(width: 48, height: 48)
 
@@ -574,7 +588,7 @@ struct RoutineTaskFieldsForm: View {
                         .foregroundStyle(textColor)
                     Text("Tap to change the icon")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(secondaryTextColor)
                 }
 
                 Spacer()
@@ -584,13 +598,14 @@ struct RoutineTaskFieldsForm: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 12, height: 12)
-                    .foregroundStyle(accent)
+                    .foregroundStyle(accentColor)
+                    .bubblyIconMaterial(tint: accentColor)
             }
             .padding(14)
-            .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                    .strokeBorder(accentColor, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
@@ -605,7 +620,8 @@ struct RoutineTaskFieldsForm: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 17, height: 17)
-                .foregroundStyle(accent)
+                .foregroundStyle(accentColor)
+                .bubblyIconMaterial(tint: accentColor)
 
             Text(title)
                 .font(.system(size: 15, weight: .black, design: .rounded))
@@ -621,19 +637,23 @@ struct RoutineTaskFieldsForm: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.45))
+            fieldLabel(title)
 
             content()
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                        .strokeBorder(accentColor, lineWidth: 1)
                 }
         }
+    }
+
+    private func fieldLabel(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .black, design: .rounded))
+            .foregroundStyle(theme.palette.textSecondary)
     }
 
     private func multilineCard(title: String, placeholder: String, text: Binding<String>) -> some View {
@@ -661,7 +681,7 @@ struct RoutineTaskFieldsForm: View {
                     .foregroundStyle(textColor)
                 Text(subtitle)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(secondaryTextColor)
             }
 
             Spacer()
@@ -671,14 +691,15 @@ struct RoutineTaskFieldsForm: View {
                 iconName: icon,
                 accentColor: accentColor,
                 accessibilityLabel: title,
-                isDisabled: isDisabled
+                isDisabled: isDisabled,
+                usesIconMaterial: true
             )
         }
         .padding(14)
-        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                .strokeBorder(accentColor, lineWidth: 1)
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: isOn.wrappedValue)
     }
@@ -690,7 +711,7 @@ struct RoutineTaskFieldsForm: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("ENVIRONMENT")
                 .font(.system(size: 10, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(theme.palette.textSecondary)
 
             LazyVGrid(columns: [
                 GridItem(.flexible()),
@@ -718,10 +739,10 @@ struct RoutineTaskFieldsForm: View {
                     .onSubmit { dismissKeyboard() }
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                            .strokeBorder(accentColor, lineWidth: 1)
                     }
             }
         }
@@ -735,17 +756,18 @@ struct RoutineTaskFieldsForm: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(isSelected ? accentFillTextColor : .white.opacity(0.6))
-                .wcagContrastLift(on: accentColor, isActive: isSelected)
+                .foregroundStyle(isSelected ? .black : secondaryTextColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
-                .background(isSelected ? accent : AnyShapeStyle(Color.white.opacity(0.06)))
+                .background {
+                    selectionMaterial(isSelected: isSelected, cornerRadius: 12)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(isSelected ? Color.clear : Color.white.opacity(0.12), lineWidth: 1)
+                        .strokeBorder(isSelected ? accentColor : theme.palette.textPrimary.opacity(0.12), lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -778,18 +800,17 @@ struct RoutineTaskFieldsForm: View {
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .lineLimit(1)
                     }
-                    .foregroundStyle(isSelected ? accentFillTextColor : .white.opacity(0.6))
-                    .wcagContrastLift(on: accentColor, isActive: isSelected)
+                    .foregroundStyle(isSelected ? .black : secondaryTextColor)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(
-                        isSelected ? accent : AnyShapeStyle(Color.white.opacity(0.06))
-                    )
+                    .background {
+                        selectionMaterial(isSelected: isSelected, cornerRadius: 12)
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .strokeBorder(
-                                isSelected ? Color.clear : Color.white.opacity(0.12),
+                                isSelected ? accentColor : theme.palette.textPrimary.opacity(0.12),
                                 lineWidth: 1
                             )
                     )
@@ -811,17 +832,16 @@ struct RoutineTaskFieldsForm: View {
                 } label: {
                     Text(day.short)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(active ? accentFillTextColor : .white.opacity(0.4))
-                        .wcagContrastLift(on: accentColor, isActive: active)
+                        .foregroundStyle(active ? .black : secondaryTextColor.opacity(0.7))
                         .frame(maxWidth: .infinity)
                         .frame(height: 40)
-                        .background(
-                            active ? accent : AnyShapeStyle(LColors.glassSurface),
-                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        )
+                        .background {
+                            selectionMaterial(isSelected: active, cornerRadius: 12)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                                .strokeBorder(active ? accentColor : theme.palette.textPrimary.opacity(0.12), lineWidth: 1)
                         }
                 }
                 .buttonStyle(.plain)
@@ -833,7 +853,7 @@ struct RoutineTaskFieldsForm: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("REMIND BEFORE (MIN)")
                 .font(.system(size: 10, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.45))
+                .foregroundStyle(theme.palette.textSecondary)
 
             HStack(spacing: 8) {
                 ForEach(leadOptions, id: \.self) { option in
@@ -843,22 +863,32 @@ struct RoutineTaskFieldsForm: View {
                     } label: {
                         Text(option == 0 ? "On time" : "\(option)")
                             .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(active ? accentFillTextColor : .white.opacity(0.5))
-                            .wcagContrastLift(on: accentColor, isActive: active)
+                            .foregroundStyle(active ? .black : secondaryTextColor.opacity(0.8))
                             .frame(maxWidth: .infinity)
                             .frame(height: 36)
-                            .background(
-                                active ? accent : AnyShapeStyle(LColors.glassSurface),
-                                in: RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            )
+                            .background {
+                                selectionMaterial(isSelected: active, cornerRadius: 11)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                                    .strokeBorder(active ? accentColor : theme.palette.textPrimary.opacity(0.12), lineWidth: 1)
                             }
                     }
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionMaterial(isSelected: Bool, cornerRadius: CGFloat) -> some View {
+        if isSelected {
+            BubblyIconMaterial(tint: accentColor)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(theme.palette.surface)
         }
     }
 
@@ -872,10 +902,10 @@ struct RoutineTaskFieldsForm: View {
                         .submitLabel(.done)
                         .onSubmit { dismissKeyboard() }
                             .padding(12)
-                        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                                .strokeBorder(accentColor, lineWidth: 1)
                         }
 
                     removeButton { steps.removeAll { $0.id == step.id } }
@@ -900,10 +930,10 @@ struct RoutineTaskFieldsForm: View {
                         .submitLabel(.done)
                         .onSubmit { dismissKeyboard() }
                             .padding(12)
-                        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                                .strokeBorder(accentColor, lineWidth: 1)
                         }
 
                     removeButton { supplies.removeAll { $0.id == supply.id } }
@@ -927,10 +957,10 @@ struct RoutineTaskFieldsForm: View {
                             .submitLabel(.done)
                             .onSubmit { dismissKeyboard() }
                                     .padding(12)
-                            .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                                    .strokeBorder(accentColor, lineWidth: 1)
                             }
 
                         removeButton { obstacles.removeAll { $0.id == item.id } }
@@ -944,10 +974,10 @@ struct RoutineTaskFieldsForm: View {
                         .onSubmit { dismissKeyboard() }
                             .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay {
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(LColors.success.opacity(0.28), lineWidth: 1)
+                                .strokeBorder(accentColor, lineWidth: 1)
                         }
                 }
             }
@@ -967,10 +997,9 @@ struct RoutineTaskFieldsForm: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 15, height: 15)
-                .foregroundStyle(Color(lureliaHex: "#ff9be6"))
+                .foregroundStyle(accentColor)
+                .bubblyIconMaterial(tint: accentColor)
                 .frame(width: 40, height: 40)
-                .background(Color(lureliaHex: "#ff9be6").opacity(0.10), in: Circle())
-                .overlay { Circle().strokeBorder(Color(lureliaHex: "#ff9be6").opacity(0.3), lineWidth: 1) }
         }
         .buttonStyle(.plain)
     }
@@ -983,7 +1012,8 @@ struct RoutineTaskFieldsForm: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 15, height: 15)
-                    .foregroundStyle(accent)
+                    .foregroundStyle(accentColor)
+                    .bubblyIconMaterial(tint: accentColor)
 
                 Text(title)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -992,10 +1022,10 @@ struct RoutineTaskFieldsForm: View {
                 Spacer()
             }
             .padding(12)
-            .background(LColors.glassSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(LColors.glassBorder, lineWidth: 1)
+                    .strokeBorder(accentColor, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)

@@ -45,6 +45,9 @@ struct CommentAttachmentComposer: View {
     @ObservedObject var draft: CommentAttachmentDraft
     let eventID: String
     let uploaderUserID: String
+    let tint: Color
+
+    @Environment(\.appTheme) private var theme
 
     @State private var photoItem: PhotosPickerItem?
     @State private var showingFileImporter = false
@@ -110,11 +113,14 @@ struct CommentAttachmentComposer: View {
     private func label(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .black, design: .rounded))
-            .foregroundStyle(LColors.textPrimary)
+            .foregroundStyle(.black)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Capsule().fill(LColors.glassSurface2))
-            .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+            .background {
+                BubblyIconMaterial(tint: tint)
+                    .clipShape(Capsule())
+            }
+            .overlay(Capsule().strokeBorder(tint, lineWidth: 1))
     }
 
     @ViewBuilder
@@ -138,7 +144,7 @@ struct CommentAttachmentComposer: View {
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(LColors.glassBorder, lineWidth: 1),
+                    .strokeBorder(tint, lineWidth: 1),
             )
 
             Button {
@@ -173,7 +179,7 @@ struct CommentAttachmentComposer: View {
         }
         .padding(2)
         .frame(width: 60, height: 60)
-        .background(LColors.glassSurface2)
+        .background(theme.palette.surface)
     }
 
     private func handlePhoto(_ item: PhotosPickerItem) async {

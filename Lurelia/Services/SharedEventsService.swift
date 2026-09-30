@@ -51,7 +51,10 @@ final class SharedEventsService: ObservableObject {
         var comps = URLComponents(url: LureliaAPIConfig.route("/events"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [URLQueryItem(name: "userID", value: userID)]
         let payload: SharedEventListPayload = try await get(url: comps.url!)
-        return payload.events
+        return SharedEventListBucketsDTO(
+            asHost: payload.events.asHost.filter { $0.cancelledAt == nil },
+            asAttendee: payload.events.asAttendee.filter { $0.cancelledAt == nil }
+        )
     }
 
     func getEvent(_ id: String) async throws -> SharedEventDTO {
@@ -135,6 +138,20 @@ final class SharedEventsService: ObservableObject {
             url: LureliaAPIConfig.route("/events/\(eventID)/attendees"),
         )
         return payload.attendees
+    }
+
+    func leaveEvent(_ eventID: String, userID: String) async throws {
+        struct Body: Encodable {
+            let userID: String
+        }
+        struct Wrap: Decodable {
+            let attendee: AttendeeDTO
+        }
+
+        let _: Wrap = try await post(
+            url: LureliaAPIConfig.route("/events/\(eventID)/leave"),
+            body: Body(userID: userID),
+        )
     }
 
     // MARK: - Discussion

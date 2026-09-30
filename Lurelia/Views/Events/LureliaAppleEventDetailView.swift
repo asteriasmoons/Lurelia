@@ -8,8 +8,8 @@
 //  jump to the Apple Calendar app to make changes.
 //
 //  Layout matches the other event sheets: title top-left, xmarkwavy
-//  top-right, GlassCard header, section labels outside GlassCards with
-//  FrostyTiles inside.
+//  top-right, a full-sheet tile background, and event-tinted material
+//  cards for the nested content.
 //
 
 import SwiftData
@@ -117,14 +117,23 @@ struct LureliaAppleEventDetailView: View {
             Spacer(minLength: 8)
 
             Button { dismiss() } label: {
-                Image("xmarkwavy")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(LGradients.header)
-                    .frame(width: 24, height: 24)
+                ZStack {
+                    Color.clear
+
+                    Image("xmarkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
+                        .shadow(color: Color.black.opacity(0.42), radius: 2, x: 0, y: 1)
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Close")
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 4)
@@ -133,18 +142,27 @@ struct LureliaAppleEventDetailView: View {
     // MARK: - Header card
 
     private var headerCard: some View {
-        FrostyTile(cornerRadius: 24, padding: LSpacing.cardPadding) {
+        detailCard(cornerRadius: 24, padding: LSpacing.cardPadding) {
             VStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.10))
+                        .fill(Color.black.opacity(0.34))
                         .frame(width: 70, height: 70)
+
+                    Circle()
+                        .strokeBorder(lineWidth: 1.6)
+                        .frame(width: 70, height: 70)
+                        .bubblyIconMaterial(tint: eventTint)
+                        .allowsHitTesting(false)
 
                     Button {
                         isIconPickerPresented = true
                     } label: {
                         LureliaIconView(iconId: displayIcon, size: 36)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(eventTint)
+                            .bubblyIconMaterial(tint: eventTint)
+                            .frame(width: 70, height: 70)
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                 }
@@ -167,34 +185,7 @@ struct LureliaAppleEventDetailView: View {
     }
 
     private var detailBackground: some View {
-        ZStack {
-            LureliaBackgroundAlt()
-
-            eventTint
-                .opacity(0.18)
-
-            RadialGradient(
-                colors: [
-                    eventTint.opacity(0.34),
-                    eventTint.opacity(0.12),
-                    Color.clear
-                ],
-                center: .topTrailing,
-                startRadius: 40,
-                endRadius: 520
-            )
-
-            LinearGradient(
-                colors: [
-                    eventTint.opacity(0.12),
-                    Color.clear,
-                    eventTint.opacity(0.08)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
-        .ignoresSafeArea()
+        BubblyTileBackground(tint: eventTint)
     }
 
     // MARK: - Sections
@@ -251,7 +242,7 @@ struct LureliaAppleEventDetailView: View {
 
     private var notesSection: some View {
         section("Description", icon: "writefeather") {
-            FrostyTile {
+            detailCard {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("DESCRIPTION")
                         .font(.system(size: 10, weight: .black, design: .rounded))
@@ -268,7 +259,7 @@ struct LureliaAppleEventDetailView: View {
     }
 
     private var lureliaCalendarDropdown: some View {
-        FrostyTile {
+        detailCard {
             VStack(alignment: .leading, spacing: 10) {
                 Text("LURELIA CALENDAR")
                     .font(.system(size: 10, weight: .black, design: .rounded))
@@ -304,6 +295,8 @@ struct LureliaAppleEventDetailView: View {
                             .scaledToFit()
                             .frame(width: 14, height: 14)
                             .foregroundStyle(.white.opacity(0.8))
+                            .bubblyIconMaterial(tint: .white)
+                            .shadow(color: Color.black.opacity(0.42), radius: 2, x: 0, y: 1)
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 11)
@@ -376,7 +369,9 @@ struct LureliaAppleEventDetailView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 14, height: 14)
-                        .foregroundStyle(LGradients.header)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
+                        .shadow(color: Color.black.opacity(0.42), radius: 2, x: 0, y: 1)
                 }
             }
             .padding(.horizontal, 10)
@@ -397,14 +392,19 @@ struct LureliaAppleEventDetailView: View {
         } label: {
             Text("Open in Calendar")
                 .font(.system(size: 15, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 50)
-                .background { LureliaNeutralGlassSurface(cornerRadius: 18) }
-                .overlay(
+                .background {
+                    BubblyCardMaterial(tint: eventTint, cornerRadius: 18)
+                }
+                .overlay {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(LColors.neutralPearl.opacity(0.12), lineWidth: 1)
-                )
+                        .strokeBorder(lineWidth: 1.2)
+                        .bubblyIconMaterial(tint: eventTint)
+                        .allowsHitTesting(false)
+                }
+                .shadow(color: Color.black.opacity(0.62), radius: 8, x: 0, y: 4)
         }
         .buttonStyle(.plain)
         .padding(.top, 6)
@@ -426,6 +426,8 @@ struct LureliaAppleEventDetailView: View {
                     .scaledToFit()
                     .frame(width: 20, height: 20)
                     .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
+                    .shadow(color: Color.black.opacity(0.42), radius: 2, x: 0, y: 1)
 
                 Text(title)
                     .font(.system(size: 20, weight: .black, design: .rounded))
@@ -439,8 +441,32 @@ struct LureliaAppleEventDetailView: View {
         }
     }
 
+    private func detailCard<Content: View>(
+        cornerRadius: CGFloat = 16,
+        padding: CGFloat = 12,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ZStack {
+                    BubblyCardMaterial(tint: eventTint, cornerRadius: cornerRadius)
+
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(Color.black.opacity(0.12))
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(lineWidth: 1.2)
+                    .bubblyIconMaterial(tint: eventTint)
+                    .allowsHitTesting(false)
+            }
+    }
+
     private func dataTile(_ label: String, value: String) -> some View {
-        FrostyTile {
+        detailCard {
             VStack(alignment: .leading, spacing: 6) {
                 Text(label.uppercased())
                     .font(.system(size: 10, weight: .black, design: .rounded))

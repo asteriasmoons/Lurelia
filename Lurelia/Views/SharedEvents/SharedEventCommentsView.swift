@@ -15,9 +15,11 @@ struct SharedEventCommentsView: View {
     let currentAvatarURL: String?
     let attendees: [AttendeeDTO]
     let canModerate: Bool
+    let tint: Color
     let onChanged: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @StateObject private var service = SharedEventsService.shared
 
     @State private var comments: [CommentDTO] = []
@@ -62,7 +64,8 @@ struct SharedEventCommentsView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -101,6 +104,7 @@ struct SharedEventCommentsView: View {
                     .padding(.bottom, 10)
             }
         }
+        .presentationBackground(theme.palette.background)
         .task { await reload() }
         .alert(
             "Discussion error",
@@ -137,10 +141,10 @@ struct SharedEventCommentsView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 20, height: 20)
-                    .foregroundStyle(LGradients.header)
+                    .foregroundStyle(.white)
+                    .bubblyIconMaterial(tint: .white)
                     .frame(width: 38, height: 38)
-                    .background(LColors.glassSurface, in: Circle())
-                    .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close discussion")
@@ -151,10 +155,10 @@ struct SharedEventCommentsView: View {
     }
 
     private var loadingCard: some View {
-        GlassCard(cornerRadius: 20) {
+        sharedSurface(cornerRadius: 20) {
             HStack(spacing: 10) {
                 ProgressView()
-                    .tint(LColors.accent)
+                    .tint(tint)
                 Text("Loading comments...")
                     .font(.system(size: 13, weight: .black, design: .rounded))
                     .foregroundStyle(LColors.textSecondary)
@@ -164,7 +168,7 @@ struct SharedEventCommentsView: View {
     }
 
     private var emptyCard: some View {
-        GlassCard(cornerRadius: 20) {
+        sharedSurface(cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("No comments yet")
                     .font(.system(size: 16, weight: .black, design: .rounded))
@@ -178,7 +182,7 @@ struct SharedEventCommentsView: View {
     }
 
     private func commentThread(_ comment: CommentDTO) -> AnyView {
-        AnyView(GlassCard(cornerRadius: 20) {
+        AnyView(sharedSurface(cornerRadius: 20) {
             VStack(alignment: .leading, spacing: 12) {
                 discussionRow(
                     authorUserID: comment.authorUserID,
@@ -256,7 +260,7 @@ struct SharedEventCommentsView: View {
                 .padding(.leading, 14)
             }
         }
-        .threadRail(depth: depth))
+        .threadRail(depth: depth, tint: tint))
     }
 
     private func discussionRow(
@@ -292,8 +296,7 @@ struct SharedEventCommentsView: View {
                     Spacer(minLength: 0)
                 }
 
-                Text(mentionStyledBody(body))
-                    .font(.system(size: indentation == 0 ? 14 : 13, weight: .semibold, design: .rounded))
+                mentionStyledBody(body, fontSize: indentation == 0 ? 14 : 13)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let ids = attachmentIDs, !ids.isEmpty {
@@ -334,7 +337,7 @@ struct SharedEventCommentsView: View {
     }
 
     private var composer: some View {
-        GlassCard(cornerRadius: 18, padding: 10) {
+        sharedSurface(cornerRadius: 18, padding: 10) {
             VStack(alignment: .leading, spacing: 8) {
                 if let replyTarget {
                     HStack(spacing: 8) {
@@ -362,6 +365,7 @@ struct SharedEventCommentsView: View {
                     draft: attachmentDraft,
                     eventID: eventID,
                     uploaderUserID: currentUserID,
+                    tint: tint,
                 )
 
                 HStack(alignment: .bottom, spacing: 8) {
@@ -378,19 +382,26 @@ struct SharedEventCommentsView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .background(
-                            LColors.glassSurface2,
+                            theme.palette.surface,
                             in: RoundedRectangle(cornerRadius: 14, style: .continuous),
                         )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(tint, lineWidth: 1)
+                        }
 
                     Button {
                         Task { await submitDraft() }
                     } label: {
                         Text(isSubmitting ? "..." : "Send")
                             .font(.system(size: 13, weight: .black, design: .rounded))
-                            .foregroundStyle(Color.white.adaptivePrimaryText)
+                            .foregroundStyle(.black)
                             .padding(.horizontal, 14)
                             .frame(height: 40)
-                            .background(Capsule().fill(LGradients.header))
+                            .background {
+                                BubblyIconMaterial(tint: tint)
+                                    .clipShape(Capsule())
+                            }
                     }
                     .buttonStyle(.plain)
                     .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
@@ -422,8 +433,8 @@ struct SharedEventCommentsView: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
-                        .background(LColors.glassSurface2, in: Capsule())
-                        .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                        .background(theme.palette.surface, in: Capsule())
+                        .overlay(Capsule().strokeBorder(tint, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
@@ -449,7 +460,7 @@ struct SharedEventCommentsView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
+        .overlay(Circle().strokeBorder(tint, lineWidth: 1))
     }
 
     private func avatarFallback(name: String) -> some View {
@@ -487,21 +498,66 @@ struct SharedEventCommentsView: View {
         return avatarURL
     }
 
-    private func mentionStyledBody(_ value: String) -> AttributedString {
-        var attributed = AttributedString(value)
-        attributed.foregroundColor = LColors.textPrimary
+    private func mentionStyledBody(_ value: String, fontSize: CGFloat) -> some View {
+        let layers = mentionLayers(value, fontSize: fontSize)
+
+        return ZStack(alignment: .topLeading) {
+            Text(layers.base)
+            Text(layers.materialMask)
+                .bubblyIconMaterial(tint: tint)
+        }
+        .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func mentionLayers(
+        _ value: String,
+        fontSize: CGFloat
+    ) -> (base: AttributedString, materialMask: AttributedString) {
+        var base = AttributedString(value)
+        base.foregroundColor = theme.palette.textPrimary
+
+        var materialMask = AttributedString(value)
+        materialMask.foregroundColor = .clear
+
         let tokens = Set(mentionCandidates.map { "@\(mentionToken($0.displayName))" })
 
         for token in tokens where !token.isEmpty {
-            var searchStart = attributed.startIndex
-            while let range = attributed[searchStart...].range(of: token) {
-                attributed[range].foregroundColor = LColors.accent
-                attributed[range].font = .system(size: 14, weight: .black, design: .rounded)
-                searchStart = range.upperBound
+            var baseSearchStart = base.startIndex
+            var maskSearchStart = materialMask.startIndex
+
+            while let baseRange = base[baseSearchStart...].range(of: token),
+                  let maskRange = materialMask[maskSearchStart...].range(of: token) {
+                base[baseRange].foregroundColor = .clear
+                materialMask[maskRange].foregroundColor = .white
+                materialMask[maskRange].font = .system(
+                    size: fontSize,
+                    weight: .black,
+                    design: .rounded
+                )
+                baseSearchStart = baseRange.upperBound
+                maskSearchStart = maskRange.upperBound
             }
         }
 
-        return attributed
+        return (base, materialMask)
+    }
+
+    private func sharedSurface<Content: View>(
+        cornerRadius: CGFloat,
+        padding: CGFloat = 16,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(padding)
+            .background(
+                theme.palette.surface,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(tint, lineWidth: 1)
+            }
     }
 
     private func canDelete(authorUserID: String) -> Bool {
@@ -640,11 +696,12 @@ private struct CommentMentionCandidate: Identifiable {
 
 private struct CommentThreadRailModifier: ViewModifier {
     let depth: Int
+    let tint: Color
 
     func body(content: Content) -> some View {
         HStack(alignment: .top, spacing: 10) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(LColors.accent.opacity(0.55))
+                .fill(tint.opacity(0.55))
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .padding(.vertical, 2)
@@ -656,7 +713,7 @@ private struct CommentThreadRailModifier: ViewModifier {
 }
 
 private extension View {
-    func threadRail(depth: Int) -> some View {
-        modifier(CommentThreadRailModifier(depth: depth))
+    func threadRail(depth: Int, tint: Color) -> some View {
+        modifier(CommentThreadRailModifier(depth: depth, tint: tint))
     }
 }

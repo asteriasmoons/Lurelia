@@ -9,6 +9,15 @@ import UIKit
 import Combine
 import WidgetKit
 
+private extension View {
+    func habitCardTextMaterial(opacity: Double = 1) -> some View {
+        foregroundStyle(.white)
+            .bubblyIconMaterial(tint: .white)
+            .opacity(opacity)
+            .shadow(color: Color.black.opacity(0.42), radius: 1.5, x: 0, y: 1)
+    }
+}
+
 struct LureliaHabitCard: View {
     @Environment(\.modelContext) private var modelContext
 
@@ -26,6 +35,47 @@ struct LureliaHabitCard: View {
     private var todaysSkip: LureliaHabitSkip? { habit.todaysSkip() }
 
     private var accent: Color { habit.color }
+
+    private var isPurpleAccent: Bool {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+
+        guard UIColor(accent).getHue(
+            &hue,
+            saturation: &saturation,
+            brightness: &brightness,
+            alpha: &alpha
+        ) else {
+            return false
+        }
+
+        return saturation >= 0.10 && (0.68...0.92).contains(hue)
+    }
+
+    private var progressFillTint: Color {
+        isPurpleAccent ? .white : accent
+    }
+
+    private var todayKanbanFireDates: [Date] {
+        habit.fireDates(on: todayStart, calendar: .current)
+    }
+
+    private var isKanbanCompletionSynchronized: Bool {
+        guard habit.isCompletedToday else { return false }
+        guard !todayKanbanFireDates.isEmpty else { return true }
+        guard let todaysLog else { return false }
+
+        let requiredCompletionCount = min(habit.target, todayKanbanFireDates.count)
+        let recordedCompletionCount = todayKanbanFireDates.reduce(into: 0) { count, fireDate in
+            if todaysLog.isCompleted(atFireDate: fireDate) {
+                count += 1
+            }
+        }
+
+        return recordedCompletionCount >= requiredCompletionCount
+    }
 
     // MARK: - Scheduled fire times
 
@@ -111,115 +161,132 @@ struct LureliaHabitCard: View {
     // MARK: - Body
 
     var body: some View {
-        // Tighten the GlassCard's own vertical/horizontal padding — the default
-        // (LSpacing.cardPadding = 20) is the biggest contributor to card height.
-        GlassCard(cornerRadius: 20, padding: 14, tint: accent) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
 
-                // Row 1: icon + title + count
-                HStack(alignment: .center, spacing: 10) {
-                    LureliaHabitIconPreview(iconName: habit.iconName ?? "flame", tint: accent)
-                        .frame(width: 30, height: 30)
+            // Row 1: icon + title + count
+            HStack(alignment: .center, spacing: 10) {
+                LureliaHabitIconPreview(
+                    iconName: habit.iconName ?? "flame",
+                    tint: accent,
+                    usesDarkCardTreatment: true
+                )
+                    .frame(width: 30, height: 30)
 
-                    Text(habit.title)
-                        .font(.system(size: 17, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                Text(habit.title)
+                    .font(.system(size: 17, weight: .black, design: .rounded))
+                    .habitCardTextMaterial()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
 
-                    Spacer(minLength: 6)
+                Spacer(minLength: 6)
 
-                    Text("\(habit.todaysCount)/\(habit.target)")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 3)
-                        .background(accent.opacity(0.22), in: Capsule())
-                        .overlay(
-                            Capsule().strokeBorder(accent.opacity(0.55), lineWidth: 1)
-                        )
+                Text("\(habit.todaysCount)/\(habit.target)")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .habitCardTextMaterial()
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background(accent.opacity(0.22), in: Capsule())
+                    .overlay(
+                        Capsule().strokeBorder(accent.opacity(0.55), lineWidth: 1)
+                    )
 
-                    // Pencil edit button — separate tap target, does NOT navigate.
-                    Button {
-                        onEdit()
-                    } label: {
-                        Image("pencil")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 12, height: 12)
-                            .foregroundStyle(accent)
-                            .frame(width: 24, height: 24)
-                            .background(accent.opacity(0.14), in: Circle())
-                            .overlay(Circle().strokeBorder(accent.opacity(0.45), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .simultaneousGesture(TapGesture().onEnded {})
+                // Pencil edit button — separate tap target, does NOT navigate.
+                Button {
+                    onEdit()
+                } label: {
+                    Image("pencil")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 12, height: 12)
+                        .foregroundStyle(accent)
+                        .bubblyIconMaterial(tint: accent)
+                        .shadow(color: Color.black.opacity(0.45), radius: 1.5, x: 0, y: 1)
+                        .frame(width: 24, height: 24)
+                        .background(accent.opacity(0.14), in: Circle())
+                        .overlay(Circle().strokeBorder(accent.opacity(0.45), lineWidth: 1))
                 }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded {})
 
-                // Row 2 (combined): each occurrence is a compact vertical unit
-                // (circle stacked directly over its time-label pill). Units sit
-                // in a leading-aligned HStack with consistent spacing — no
-                // full-width spreading, so 1-occurrence habits hug the leading
-                // side and 5-occurrence habits stay dense.
-                occurrenceRow
-                    .padding(.top, 2) // small breathing room after the icon row
+                completionButton
+            }
 
-                // Row 3: status pill (leading) + streak+chevron cluster (trailing).
-                HStack(alignment: .center, spacing: 8) {
-                    statusPillView
+            // Row 2 (combined): each occurrence is a compact vertical unit
+            // (circle stacked directly over its time-label pill). Units sit
+            // in a leading-aligned HStack with consistent spacing — no
+            // full-width spreading, so 1-occurrence habits hug the leading
+            // side and 5-occurrence habits stay dense.
+            occurrenceRow
+                .padding(.top, 2) // small breathing room after the icon row
 
-                    Spacer(minLength: 6)
+            // Row 3: status pill (leading) + streak+chevron cluster (trailing).
+            HStack(alignment: .center, spacing: 8) {
+                statusPillView
 
-                    HStack(spacing: 4) {
-                        Image("flame")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 11, height: 11)
-                            .foregroundStyle(accent)
+                Spacer(minLength: 6)
 
-                        Text("\(habit.dailyStreak) \(habit.dailyStreak == 1 ? "day" : "days")")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(accent.opacity(0.18), in: Capsule())
-                    .overlay(Capsule().strokeBorder(accent.opacity(0.45), lineWidth: 1))
+                HStack(spacing: 4) {
+                    Image("flame")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 11, height: 11)
+                        .foregroundStyle(accent)
+                        .bubblyIconMaterial(tint: accent)
+                        .shadow(color: Color.black.opacity(0.42), radius: 1.5, x: 0, y: 1)
 
-                    // Chevron — separate tap target, does NOT navigate.
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            isExpanded.toggle()
-                        }
-                    } label: {
-                        Image(isExpanded ? "chevup" : "chevdown")
-                            .renderingMode(.template)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 12, height: 12)
-                            .foregroundStyle(accent)
-                            .frame(width: 24, height: 24)
-                            .background(accent.opacity(0.14), in: Circle())
-                            .overlay(Circle().strokeBorder(accent.opacity(0.45), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    // Prevent the surrounding NavigationLink from firing.
-                    .simultaneousGesture(TapGesture().onEnded {})
+                    Text("\(habit.dailyStreak) \(habit.dailyStreak == 1 ? "day" : "days")")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .habitCardTextMaterial()
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(accent.opacity(0.18), in: Capsule())
+                .overlay(Capsule().strokeBorder(accent.opacity(0.45), lineWidth: 1))
 
-                // Expanded management controls
-                if isExpanded {
-                    Rectangle()
-                        .fill(accent.opacity(0.25))
-                        .frame(height: 1)
-                        .padding(.top, 2)
-
-                    expandedControls
+                // Chevron — separate tap target, does NOT navigate.
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(isExpanded ? "chevup" : "chevdown")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 12, height: 12)
+                        .foregroundStyle(accent)
+                        .bubblyIconMaterial(tint: accent)
+                        .shadow(color: Color.black.opacity(0.45), radius: 1.5, x: 0, y: 1)
+                        .frame(width: 24, height: 24)
+                        .background(accent.opacity(0.14), in: Circle())
+                        .overlay(Circle().strokeBorder(accent.opacity(0.45), lineWidth: 1))
                 }
+                .buttonStyle(.plain)
+                // Prevent the surrounding NavigationLink from firing.
+                .simultaneousGesture(TapGesture().onEnded {})
+            }
+
+            // Expanded management controls
+            if isExpanded {
+                Rectangle()
+                    .fill(accent.opacity(0.25))
+                    .frame(height: 1)
+                    .padding(.top, 2)
+
+                expandedControls
             }
         }
+        .padding(14)
+        .background {
+            BubblyCardMaterial(
+                tint: accent,
+                cornerRadius: 20
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: accent.opacity(0.13), radius: 14, x: 0, y: 7)
         .alert("Delete Habit?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { deleteHabit() }
             Button("Cancel", role: .cancel) { }
@@ -238,6 +305,44 @@ struct LureliaHabitCard: View {
     }
 
     // MARK: - Progress dots + time pills (two independent leading rows)
+
+    private var completionButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                quickLog()
+            }
+        } label: {
+            ZStack {
+                if isKanbanCompletionSynchronized {
+                    BubblyIconMaterial(tint: accent)
+                        .clipShape(Circle())
+                        .opacity(0.72)
+                }
+
+                Circle()
+                    .strokeBorder(accent.opacity(0.85), lineWidth: 1.5)
+                    .bubblyIconMaterial(tint: accent)
+
+                if isKanbanCompletionSynchronized {
+                    Image("checkwavy")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 10, height: 10)
+                        .foregroundStyle(.white)
+                        .bubblyIconMaterial(tint: .white)
+                        .shadow(color: Color.black.opacity(0.42), radius: 1.5, x: 0, y: 1)
+                }
+            }
+            .frame(width: 24, height: 24)
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isKanbanCompletionSynchronized)
+        .opacity(isKanbanCompletionSynchronized ? 0.72 : 1)
+        .simultaneousGesture(TapGesture().onEnded {})
+        .accessibilityLabel(isKanbanCompletionSynchronized ? "Habit completed today" : "Complete habit")
+    }
 
     @ViewBuilder
     private var occurrenceRow: some View {
@@ -262,6 +367,7 @@ struct LureliaHabitCard: View {
                                     lineWidth: 1.4
                                 )
                             )
+                            .bubblyIconMaterial(tint: accent)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -289,14 +395,24 @@ struct LureliaHabitCard: View {
         // one-per-day habit is completed.
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(accent.opacity(0.18))
+                BubblyCardMaterial(
+                    tint: accent,
+                    cornerRadius: 4
+                )
+                .clipShape(Capsule())
+                .opacity(0.34)
 
-                Capsule()
-                    .fill(accent)
-                    .frame(width: geo.size.width * habit.progress)
+                BubblyCardMaterial(
+                    tint: progressFillTint,
+                    cornerRadius: 4
+                )
+                .frame(width: geo.size.width * habit.progress)
+                .clipShape(Capsule())
             }
-            .overlay(Capsule().strokeBorder(accent.opacity(0.45), lineWidth: 1))
+            .overlay {
+                Capsule()
+                    .strokeBorder(accent.opacity(0.45), lineWidth: 1)
+            }
         }
         .frame(height: 8)
         .animation(.spring(duration: 0.35), value: habit.progress)
@@ -308,7 +424,7 @@ struct LureliaHabitCard: View {
     private func timePill(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .bold, design: .rounded))
-            .foregroundStyle(.white.opacity(0.9))
+            .habitCardTextMaterial(opacity: 0.9)
             .fixedSize()
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
@@ -323,7 +439,7 @@ struct LureliaHabitCard: View {
             case .labelled(let label, let time):
                 Text(label)
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.9))
+                    .habitCardTextMaterial(opacity: 0.9)
 
                 Circle()
                     .fill(accent.opacity(0.7))
@@ -331,12 +447,12 @@ struct LureliaHabitCard: View {
 
                 Text(time)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .habitCardTextMaterial()
 
             case .plain(let text):
                 Text(text)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .habitCardTextMaterial(opacity: 0.85)
             }
         }
         .lineLimit(1)
@@ -396,10 +512,13 @@ struct LureliaHabitCard: View {
                         Image(systemName: icon)
                     }
                 }
+                .foregroundStyle(.white)
+                .bubblyIconMaterial(tint: .white)
+                .shadow(color: Color.black.opacity(0.42), radius: 1.5, x: 0, y: 1)
 
                 Text(title)
+                    .habitCardTextMaterial(opacity: 0.85)
             }
-            .foregroundStyle(.white.opacity(0.85))
             .padding(.horizontal, 11)
             .padding(.vertical, 7)
             .background(accent.opacity(0.14))
@@ -430,13 +549,19 @@ struct LureliaHabitCard: View {
                         Image(systemName: icon)
                     }
                 }
+                .foregroundStyle(.white)
+                .bubblyIconMaterial(tint: .white)
+                .shadow(color: Color.black.opacity(0.42), radius: 1.5, x: 0, y: 1)
 
                 Text(title)
+                    .habitCardTextMaterial()
             }
-            .foregroundStyle(.white)
             .padding(.horizontal, 11)
             .padding(.vertical, 7)
-            .background(accent)
+            .background {
+                BubblyIconMaterial(tint: accent)
+                    .clipShape(Capsule())
+            }
             .clipShape(Capsule())
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.28), lineWidth: 1))
         }
@@ -448,6 +573,7 @@ struct LureliaHabitCard: View {
 
     private func quickLog() {
         let cap = habit.target
+        let calendar = Calendar.current
 
         if let existingSkip = todaysSkip {
             modelContext.delete(existingSkip)
@@ -458,13 +584,32 @@ struct LureliaHabitCard: View {
 
         if let existing = todaysLog {
             existing.habitIDString = habit.id.uuidString
-            if existing.count < cap {
+
+            let recordedScheduledCount = todayKanbanFireDates.reduce(into: 0) { count, fireDate in
+                if existing.isCompleted(atFireDate: fireDate, calendar: calendar) {
+                    count += 1
+                }
+            }
+            let representedCount = min(existing.count, todayKanbanFireDates.count)
+
+            if recordedScheduledCount < representedCount,
+               let unsynchronizedFireDate = todayKanbanFireDates.first(where: {
+                   !existing.isCompleted(atFireDate: $0, calendar: calendar)
+               }) {
+                existing.markCompleted(atFireDate: unsynchronizedFireDate, calendar: calendar)
+            } else if existing.count < cap,
+                      let nextFireDate = todayKanbanFireDates.first(where: {
+                          !existing.isCompleted(atFireDate: $0, calendar: calendar)
+                      }) {
+                existing.markCompleted(atFireDate: nextFireDate, calendar: calendar)
+            } else if existing.count < cap {
                 existing.count = min(cap, existing.count + 1)
                 existing.updatedAt = Date()
-                habit.updatedAt = Date()
-                habit.logs = (habit.logs ?? []).map { log in
-                    log.persistentModelID == existing.persistentModelID ? existing : log
-                }
+            }
+
+            habit.updatedAt = Date()
+            habit.logs = (habit.logs ?? []).map { log in
+                log.persistentModelID == existing.persistentModelID ? existing : log
             }
 
             try? modelContext.save()
@@ -480,6 +625,11 @@ struct LureliaHabitCard: View {
 
         modelContext.insert(newLog)
         habit.logs = (habit.logs ?? []) + [newLog]
+
+        if let firstFireDate = todayKanbanFireDates.first {
+            newLog.markCompleted(atFireDate: firstFireDate, calendar: calendar)
+        }
+
         habit.updatedAt = Date()
 
         try? modelContext.save()

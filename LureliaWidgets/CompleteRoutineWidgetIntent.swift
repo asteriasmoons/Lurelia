@@ -43,9 +43,11 @@ struct CompleteRoutineWidgetIntent: AppIntent {
         }
 
         if routine.phasesEnabled {
-            completeTargetPhase(routine)
+            await completeTargetPhase(routine)
         } else {
+            let pendingTasks = (routine.tasks ?? []).filter(\.isPending)
             routine.completeRoutine()
+            await cancelPendingDeliveries(for: pendingTasks)
         }
 
         try context.save()
@@ -54,7 +56,7 @@ struct CompleteRoutineWidgetIntent: AppIntent {
         return .result()
     }
 
-    private func completeTargetPhase(_ routine: LureliaRoutine) {
+    private func completeTargetPhase(_ routine: LureliaRoutine) async {
         let phases = routine.sortedPhases
 
         let targetPhase: LureliaRoutinePhase?
@@ -69,20 +71,49 @@ struct CompleteRoutineWidgetIntent: AppIntent {
         }
 
         guard let phase = targetPhase else {
+            let pendingTasks = (routine.tasks ?? []).filter(\.isPending)
             routine.completeRoutine()
+            await cancelPendingDeliveries(for: pendingTasks)
             return
         }
 
-        let phaseTasks = routine.tasksForPhase(phase)
+        let phaseTasks = routine.tasksForPhase(phase).filter(\.isPending)
+        let now = Date()
 
-        for task in phaseTasks where task.isPending {
+        for task in phaseTasks {
             task.markCompleted()
+            LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+                for: task,
+                on: now,
+                now: now
+            )
+            await LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrenceAndWait(
+                for: task,
+                on: now,
+                now: now
+            )
         }
 
         routine.updatedAt = Date()
 
         if routine.allTasksDone {
             routine.lastCompletedAt = Date()
+        }
+    }
+
+    private func cancelPendingDeliveries(for tasks: [LureliaRoutineTask]) async {
+        let now = Date()
+        for task in tasks {
+            LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+                for: task,
+                on: now,
+                now: now
+            )
+            await LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrenceAndWait(
+                for: task,
+                on: now,
+                now: now
+            )
         }
     }
 

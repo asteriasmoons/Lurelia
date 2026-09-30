@@ -1,0 +1,40 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/KanbanTimelineWidgetConfigurationIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Kanban Board",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 27
+        }
+      },
+      {
+        "comment": "",
+        "key": "Timeline",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 69
+        }
+      },
+      {
+        "comment": "",
+        "key": "Pick which Kanban board the Timeline widget should display.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 71
+        }
+      },
+      {
+        "comment": "",
+        "key": "Board",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 74
+        }
+      }
+    ]
+  },
+  "version": 1
+}

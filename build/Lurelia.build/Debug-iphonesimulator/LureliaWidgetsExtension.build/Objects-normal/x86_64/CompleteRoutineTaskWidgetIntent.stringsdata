@@ -1,0 +1,32 @@
+{
+  "source": "/Users/asteriasmoons/Desktop/Lurelia/LureliaWidgets/CompleteRoutineTaskWidgetIntent.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Complete Routine Task",
+        "location": {
+          "startingColumn": 49,
+          "startingLine": 17
+        }
+      },
+      {
+        "comment": "",
+        "key": "Completes a single routine task from the widget.",
+        "location": {
+          "startingColumn": 9,
+          "startingLine": 19
+        }
+      },
+      {
+        "comment": "",
+        "key": "Task ID",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 25
+        }
+      }
+    ]
+  },
+  "version": 1
+}

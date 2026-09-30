@@ -81,7 +81,7 @@ struct CompleteTimelineItemWidgetIntent: AppIntent {
         case TimelineItemKindString.reminder:
             try await completeReminder(reminderID: payload.itemID)
         case TimelineItemKindString.routineTask:
-            try completeRoutineTask(itemID: payload.itemID, fireDate: payload.fireDate)
+            try await completeRoutineTask(itemID: payload.itemID, fireDate: payload.fireDate)
         default:
             print("🟣 [TimelineIntent] Complete — unknown kind, ignoring")
         }
@@ -141,7 +141,7 @@ struct CompleteTimelineItemWidgetIntent: AppIntent {
 
     // MARK: - Routine task
 
-    private func completeRoutineTask(itemID: String, fireDate: Date?) throws {
+    private func completeRoutineTask(itemID: String, fireDate: Date?) async throws {
         let container = try LureliaWidgetShared.makeModelContainer()
         let context = ModelContext(container)
 
@@ -153,6 +153,15 @@ struct CompleteTimelineItemWidgetIntent: AppIntent {
             wasCompleted: true,
             occurredAt: occurredAt,
             context: context
+        )
+
+        LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+            for: task,
+            on: occurredAt
+        )
+        await LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrenceAndWait(
+            for: task,
+            on: occurredAt
         )
 
         if let routine = task.routine {
@@ -216,7 +225,7 @@ struct SkipTimelineItemWidgetIntent: AppIntent {
         case TimelineItemKindString.reminder:
             try await skipReminder(reminderID: payload.itemID)
         case TimelineItemKindString.routineTask:
-            try skipRoutineTask(itemID: payload.itemID, fireDate: payload.fireDate)
+            try await skipRoutineTask(itemID: payload.itemID, fireDate: payload.fireDate)
         default:
             print("🟣 [TimelineIntent] Skip — unknown kind, ignoring")
         }
@@ -265,7 +274,7 @@ struct SkipTimelineItemWidgetIntent: AppIntent {
 
     // MARK: - Routine task
 
-    private func skipRoutineTask(itemID: String, fireDate: Date?) throws {
+    private func skipRoutineTask(itemID: String, fireDate: Date?) async throws {
         let container = try LureliaWidgetShared.makeModelContainer()
         let context = ModelContext(container)
 
@@ -277,6 +286,15 @@ struct SkipTimelineItemWidgetIntent: AppIntent {
             wasCompleted: false,
             occurredAt: occurredAt,
             context: context
+        )
+
+        LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+            for: task,
+            on: occurredAt
+        )
+        await LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrenceAndWait(
+            for: task,
+            on: occurredAt
         )
 
         if let routine = task.routine {

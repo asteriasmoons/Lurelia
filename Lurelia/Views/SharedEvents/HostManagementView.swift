@@ -21,6 +21,7 @@ struct HostManagementView: View {
     let onChanged: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
     @StateObject private var service = SharedEventsService.shared
 
     @State private var attendees: [AttendeeDTO] = []
@@ -35,6 +36,10 @@ struct HostManagementView: View {
     @State private var attendeeForBan: AttendeeDTO?
     @State private var showingTransferConfirm: AttendeeDTO?
     @State private var showingCancelConfirm = false
+
+    private var sharedColor: Color {
+        Color(lureliaHex: eventLocal.colorHex)
+    }
 
     init(
         event: SharedEventDTO,
@@ -51,7 +56,8 @@ struct HostManagementView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
+                .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 16) {
@@ -62,12 +68,19 @@ struct HostManagementView: View {
                     dangerCard
 
                     if let err = errorMessage {
-                        GlassCard(cornerRadius: 16) {
-                            Text(err)
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(LColors.danger)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
+                        Text(err)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(LColors.danger)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(
+                                theme.palette.surface,
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(sharedColor, lineWidth: 1)
+                            }
                     }
 
                     Spacer().frame(height: 60)
@@ -76,6 +89,7 @@ struct HostManagementView: View {
                 .padding(.horizontal, LSpacing.pageHorizontal)
             }
         }
+        .presentationBackground(theme.palette.background)
         .task { await loadAll() }
         .confirmationDialog(
             "Remove attendee?",
@@ -140,25 +154,25 @@ struct HostManagementView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Manage event")
                     .font(.system(size: 22, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.textPrimary)
                 Text(eventLocal.title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(LColors.textSecondary)
+                    .foregroundStyle(theme.palette.textSecondary)
                     .lineLimit(1)
             }
             Spacer()
             Button {
                 dismiss()
             } label: {
-                Image("xmarkwavy")
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
+                BubblyIconMaterial(tint: .white)
+                    .mask {
+                        Image("xmarkwavy")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                    }
                     .frame(width: 20, height: 20)
-                    .foregroundStyle(LColors.textPrimary)
                     .frame(width: 38, height: 38)
-                    .background(LColors.glassSurface, in: Circle())
-                    .overlay(Circle().strokeBorder(LColors.glassBorder, lineWidth: 1))
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
@@ -168,24 +182,22 @@ struct HostManagementView: View {
     // MARK: - Attendees
 
     private var attendeesCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Attendees")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Attendees")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
 
-                if attendees.isEmpty {
-                    Text("No attendees yet.")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                } else {
-                    ForEach(attendees) { attendee in
-                        attendeeTile(attendee)
-                    }
+            if attendees.isEmpty {
+                Text("No attendees yet.")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            } else {
+                ForEach(attendees) { attendee in
+                    attendeeTile(attendee)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -197,22 +209,20 @@ struct HostManagementView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(attendee.displayName)
                     .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.textPrimary)
                     .lineLimit(1)
 
-                rolePill(roleTitle(for: attendee), isHost: isHost)
+                rolePill(roleTitle(for: attendee))
             }
 
             Spacer(minLength: 8)
 
             if isHost {
-                Text("Host")
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(LColors.glassSurface2))
-                    .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                sharedMaterialPill(
+                    "Host",
+                    horizontalPadding: 10,
+                    verticalPadding: 6
+                )
             } else {
                 Menu {
                     if attendee.role == "coHost" {
@@ -242,55 +252,51 @@ struct HostManagementView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tileSurface(isActive: isHost), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(tileBorder(isActive: isHost, cornerRadius: 16))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(sharedTileBorder(cornerRadius: 16))
     }
 
     // MARK: - Banned
 
     private var bannedCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Banned")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Banned")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
 
-                if banned.isEmpty {
-                    Text("No one is banned.")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
-                } else {
-                    ForEach(banned) { attendee in
-                        bannedAttendeeTile(attendee)
-                    }
+            if banned.isEmpty {
+                Text("No one is banned.")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            } else {
+                ForEach(banned) { attendee in
+                    bannedAttendeeTile(attendee)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Settings
 
     private var settingsCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Event settings")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Event settings")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .foregroundStyle(theme.palette.textPrimary)
 
-                permissionGrid
+            permissionGrid
 
-                Divider().overlay(LColors.glassBorder)
+            Divider().overlay(sharedColor.opacity(0.5))
 
-                Text("Visibility")
-                    .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textSecondary)
+            Text("Visibility")
+                .font(.system(size: 12, weight: .black, design: .rounded))
+                .foregroundStyle(theme.palette.textSecondary)
 
-                HStack(spacing: 8) {
-                    visibilityButton("Private", value: "private")
-                    visibilityButton("Link only", value: "link")
-                    visibilityButton("Public", value: "public")
-                }
+            HStack(spacing: 8) {
+                visibilityButton("Private", value: "private")
+                visibilityButton("Link only", value: "link")
+                visibilityButton("Public", value: "public")
             }
         }
     }
@@ -365,16 +371,10 @@ struct HostManagementView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(attendee.displayName)
                     .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.textPrimary)
                     .lineLimit(1)
 
-                Text("BANNED")
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.danger)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(LColors.danger.opacity(0.14)))
-                    .overlay(Capsule().strokeBorder(LColors.danger.opacity(0.42), lineWidth: 1))
+                sharedMaterialPill("BANNED")
             }
 
             Spacer(minLength: 8)
@@ -382,20 +382,19 @@ struct HostManagementView: View {
             Button {
                 Task { await unban(attendee) }
             } label: {
-                Text("Unban")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(LColors.glassSurface2))
-                    .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+                sharedMaterialPill(
+                    "Unban",
+                    fontSize: 11,
+                    horizontalPadding: 12,
+                    verticalPadding: 8
+                )
             }
             .buttonStyle(.plain)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tileSurface(isActive: false), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(tileBorder(isActive: false, cornerRadius: 16))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(sharedTileBorder(cornerRadius: 16))
     }
 
     private func permissionTile(
@@ -411,26 +410,18 @@ struct HostManagementView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
                     .font(.system(size: 12, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(theme.palette.textPrimary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.82)
 
                 Spacer(minLength: 0)
 
-                Text(state)
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(isActive ? LColors.textPrimary : LColors.textSecondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(LColors.glassSurface2))
-                    .overlay(Capsule().strokeBorder(isActive ? LColors.neutralPearl.opacity(0.32) : LColors.glassBorder, lineWidth: 1))
+                sharedMaterialPill(state, verticalPadding: 5)
             }
             .padding(12)
             .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
-            .background(permissionTileSurface(isActive: isActive), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(tileBorder(isActive: isActive, cornerRadius: 16))
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(sharedTileBorder(cornerRadius: 16))
             .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -448,29 +439,22 @@ struct HostManagementView: View {
             .frame(width: 38, height: 38)
             .background {
                 Circle()
-                    .fill(LColors.glassSurface2)
+                    .fill(theme.palette.surface)
             }
-            .overlay(Circle().strokeBorder(isHost ? LColors.neutralPearl.opacity(0.32) : LColors.glassBorder, lineWidth: 1))
+            .overlay(Circle().strokeBorder(sharedColor, lineWidth: 1))
     }
 
-    private func rolePill(_ title: String, isHost: Bool) -> some View {
-        Text(title)
-            .font(.system(size: 10, weight: .black, design: .rounded))
-            .foregroundStyle(isHost ? LColors.textPrimary : LColors.textSecondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(LColors.glassSurface2))
-            .overlay(Capsule().strokeBorder(isHost ? LColors.neutralPearl.opacity(0.32) : LColors.glassBorder, lineWidth: 1))
+    private func rolePill(_ title: String) -> some View {
+        sharedMaterialPill(title)
     }
 
     private var managePill: some View {
-        Text("Manage")
-            .font(.system(size: 11, weight: .black, design: .rounded))
-            .foregroundStyle(LColors.textPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(LColors.glassSurface2))
-            .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
+        sharedMaterialPill(
+            "Manage",
+            fontSize: 11,
+            horizontalPadding: 12,
+            verticalPadding: 8
+        )
     }
 
     private func roleTitle(for attendee: AttendeeDTO) -> String {
@@ -493,23 +477,28 @@ struct HostManagementView: View {
         return value.isEmpty ? "?" : value
     }
 
-    private func tileSurface(isActive: Bool) -> AnyShapeStyle {
-        if isActive {
-            return AnyShapeStyle(LColors.glassSurface2.opacity(0.86))
-        }
-        return AnyShapeStyle(LColors.glassSurface2.opacity(0.72))
-    }
-
-    private func permissionTileSurface(isActive: Bool) -> AnyShapeStyle {
-        if isActive {
-            return AnyShapeStyle(LColors.glassSurface2.opacity(0.88))
-        }
-        return AnyShapeStyle(LColors.glassSurface2.opacity(0.76))
-    }
-
-    private func tileBorder(isActive: Bool, cornerRadius: CGFloat) -> some View {
+    private func sharedTileBorder(cornerRadius: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .strokeBorder(isActive ? LColors.neutralPearl.opacity(0.36) : LColors.glassBorder, lineWidth: 1)
+            .strokeBorder(sharedColor, lineWidth: 1)
+    }
+
+    private func sharedMaterialPill(
+        _ title: String,
+        fontSize: CGFloat = 10,
+        horizontalPadding: CGFloat = 8,
+        verticalPadding: CGFloat = 4
+    ) -> some View {
+        Text(title)
+            .font(.system(size: fontSize, weight: .black, design: .rounded))
+            .foregroundStyle(.black)
+            .lineLimit(1)
+            .minimumScaleFactor(0.65)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .background {
+                BubblyIconMaterial(tint: sharedColor)
+                    .clipShape(Capsule())
+            }
     }
 
     private func visibilityButton(_ label: String, value: String) -> some View {
@@ -519,20 +508,24 @@ struct HostManagementView: View {
         } label: {
             Text(label)
                 .font(.system(size: 12, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(isActive ? .black : theme.palette.textPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
-                .background(
+                .background {
+                    if isActive {
+                        BubblyIconMaterial(tint: sharedColor)
+                            .clipShape(
+                                RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
+                            .fill(theme.palette.surface)
+                    }
+                }
+                .overlay {
                     RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .fill(isActive ? LColors.neutralGlassHighlight.opacity(0.10) : LColors.glassSurface2),
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: LSpacing.buttonRadius, style: .continuous)
-                        .strokeBorder(
-                            isActive ? LColors.neutralPearl.opacity(0.36) : LColors.glassBorder,
-                            lineWidth: 1,
-                        ),
-                )
+                        .strokeBorder(sharedColor, lineWidth: 1)
+                }
         }
         .buttonStyle(.plain)
         .disabled(isBusy)
@@ -541,39 +534,40 @@ struct HostManagementView: View {
     // MARK: - Danger zone
 
     private var dangerCard: some View {
-        GlassCard(cornerRadius: 20) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Danger zone")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundStyle(LColors.danger)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Danger zone")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+                .bubblyIconMaterial(tint: sharedColor)
 
-                Button {
-                    Task { await duplicateEvent() }
-                } label: {
-                    Text("Duplicate event")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(LColors.glassSurface2, in: Capsule())
-                        .overlay(Capsule().strokeBorder(LColors.glassBorder, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(isBusy)
-
-                Button {
-                    showingCancelConfirm = true
-                } label: {
-                    Text("Cancel event")
-                        .font(.system(size: 13, weight: .black, design: .rounded))
-                        .foregroundStyle(LColors.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(LColors.danger.opacity(0.75)))
-                }
-                .buttonStyle(.plain)
-                .disabled(isBusy || eventLocal.cancelledAt != nil)
+            Button {
+                Task { await duplicateEvent() }
+            } label: {
+                Text("Duplicate event")
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(theme.palette.textPrimary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(theme.palette.surface, in: Capsule())
+                    .overlay(Capsule().strokeBorder(sharedColor, lineWidth: 1))
             }
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+
+            Button {
+                showingCancelConfirm = true
+            } label: {
+                Text("Cancel event")
+                    .font(.system(size: 13, weight: .black, design: .rounded))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background {
+                        BubblyIconMaterial(tint: sharedColor)
+                            .clipShape(Capsule())
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(isBusy || eventLocal.cancelledAt != nil)
         }
     }
 

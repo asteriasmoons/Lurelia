@@ -50,11 +50,23 @@ struct SkipRoutineTaskWidgetIntent: AppIntent {
             return .result()
         }
 
+        let occurredAt = Date()
         try recordRoutineTaskHistory(
             task,
             wasCompleted: false,
-            occurredAt: Date(),
+            occurredAt: occurredAt,
             context: context
+        )
+
+        LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+            for: task,
+            on: occurredAt,
+            now: occurredAt
+        )
+        await LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrenceAndWait(
+            for: task,
+            on: occurredAt,
+            now: occurredAt
         )
 
         if let routine = task.routine {

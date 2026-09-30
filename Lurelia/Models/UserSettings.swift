@@ -28,6 +28,7 @@ final class UserSettings {
     var notificationsEnabled: Bool = false
     var hideCompletedReminders: Bool = false
     var defaultTimelineBoardIDString: String?
+    var defaultTimelineBoardIDsStorage: Data?
     var selectedAppleCalendarIDsStorage: Data?
     /// True once the user has explicitly saved their Apple Calendar
     /// visibility picks. Before that, an empty `selectedAppleCalendarIDs`
@@ -91,6 +92,7 @@ final class UserSettings {
         notificationsEnabled: Bool = false,
         hideCompletedReminders: Bool = false,
         defaultTimelineBoardIDString: String? = nil,
+        defaultTimelineBoardIDs: [UUID] = [],
         selectedAppleCalendarIDs: [String] = [],
         showAppleCalendarEvents: Bool = true,
         twoWayAppleCalendarSyncEnabled: Bool = false,
@@ -106,6 +108,9 @@ final class UserSettings {
         self.notificationsEnabled = notificationsEnabled
         self.hideCompletedReminders = hideCompletedReminders
         self.defaultTimelineBoardIDString = defaultTimelineBoardIDString
+        if !defaultTimelineBoardIDs.isEmpty {
+            self.defaultTimelineBoardIDsStorage = try? JSONEncoder().encode(defaultTimelineBoardIDs.map(\.uuidString))
+        }
         self.selectedAppleCalendarIDs = selectedAppleCalendarIDs
         self.showAppleCalendarEvents = showAppleCalendarEvents
         self.twoWayAppleCalendarSyncEnabled = twoWayAppleCalendarSyncEnabled
@@ -163,6 +168,26 @@ extension UserSettings {
         }
         set {
             defaultTimelineBoardIDString = newValue?.uuidString
+            updatedAt = Date()
+        }
+    }
+
+    var defaultTimelineBoardIDs: [UUID] {
+        get {
+            if let data = defaultTimelineBoardIDsStorage,
+               let decoded = try? JSONDecoder().decode([String].self, from: data) {
+                return decoded.compactMap(UUID.init(uuidString:))
+            }
+
+            if let legacyID = defaultTimelineBoardID {
+                return [legacyID]
+            }
+
+            return []
+        }
+        set {
+            defaultTimelineBoardIDsStorage = try? JSONEncoder().encode(newValue.map(\.uuidString))
+            defaultTimelineBoardIDString = newValue.first?.uuidString
             updatedAt = Date()
         }
     }

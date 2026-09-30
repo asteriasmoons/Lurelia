@@ -6,22 +6,43 @@
 //  `RoutineTaskDetailView` (identity card, schedule tiles, steps, purpose,
 //  trigger, environment, supplies, obstacles, rewards, consequence) but
 //  drops the runtime-only sections that don't apply to a blueprint
-//  (status, completion actions, statistics, history, tiny nudge). Uses
-//  neutral template styling so it stays separate from routine colors.
+//  (status, completion actions, statistics, history, tiny nudge). Its
+//  material treatment matches RoutineTaskDetailView using the template's
+//  rotating library accent.
 //
 
 import SwiftData
 import SwiftUI
 import UIKit
 
+private extension View {
+    func routineTemplateDarkInset<S: Shape>(in shape: S) -> some View {
+        background {
+            shape.fill(Color.black.opacity(0.34))
+        }
+    }
+}
+
 struct RoutineTaskTemplateDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
 
     let template: RoutineTaskTemplate
+    let tint: Color
     var onUse: () -> Void
     var onEdit: () -> Void
 
-    private let tint: Color = LColors.neutralPearl.opacity(0.78)
+    init(
+        template: RoutineTaskTemplate,
+        tint: Color = LColors.gradientPurple,
+        onUse: @escaping () -> Void,
+        onEdit: @escaping () -> Void
+    ) {
+        self.template = template
+        self.tint = tint
+        self.onUse = onUse
+        self.onEdit = onEdit
+    }
 
     private var templateIcon: String {
         let icon = template.icon.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -38,7 +59,7 @@ struct RoutineTaskTemplateDetailView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -69,6 +90,7 @@ struct RoutineTaskTemplateDetailView: View {
                                             .scaledToFit()
                                             .frame(width: 18, height: 18)
                                             .foregroundStyle(tint)
+                                            .bubblyIconMaterial(tint: tint)
 
                                         Text(type.label)
                                             .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -76,7 +98,7 @@ struct RoutineTaskTemplateDetailView: View {
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(.white.opacity(0.06))
+                                    .routineTemplateDarkInset(in: Capsule())
                                     .clipShape(Capsule())
                                     .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
                                 }
@@ -142,7 +164,9 @@ struct RoutineTaskTemplateDetailView: View {
                     Spacer().frame(height: 40)
                 }
                 .padding(.top, 6)
+                .routinePageWidthLocked()
             }
+            .routinePageScrollClipped()
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -164,10 +188,16 @@ struct RoutineTaskTemplateDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 17, height: 17)
-                    .foregroundStyle(LColors.textPrimary)
+                    .foregroundStyle(.black)
                     .frame(width: 40, height: 40)
-                    .background(LColors.glassSurface2, in: Circle())
-                    .overlay { Circle().strokeBorder(LColors.glassBorder, lineWidth: 1) }
+                    .background {
+                        BubblyIconMaterial(tint: tint)
+                            .clipShape(Circle())
+                    }
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
+                    }
             }
             .buttonStyle(.plain)
         }
@@ -178,13 +208,20 @@ struct RoutineTaskTemplateDetailView: View {
     // MARK: - Identity
 
     private var identityCard: some View {
-        tintedCard {
+        tintedCard(role: .hero) {
             VStack(spacing: 10) {
                 ZStack {
-                    Circle().fill(tint.opacity(0.18)).frame(width: 64, height: 64)
-                    Circle().strokeBorder(tint.opacity(0.6), lineWidth: 1.15).frame(width: 64, height: 64)
+                    Circle()
+                        .fill(Color.black.opacity(0.42))
+                        .frame(width: 64, height: 64)
+
+                    Circle()
+                        .strokeBorder(tint.opacity(0.85), lineWidth: 1)
+                        .frame(width: 64, height: 64)
+
                     LureliaIconView(iconId: templateIcon, size: 38)
-                        .foregroundStyle(tint)
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .bubblyIconMaterial(tint: tint)
                 }
 
                 Text(template.title.isEmpty ? "Untitled Template" : template.title)
@@ -207,6 +244,7 @@ struct RoutineTaskTemplateDetailView: View {
                         .scaledToFit()
                         .frame(width: 11, height: 11)
                         .foregroundStyle(tint)
+                        .bubblyIconMaterial(tint: tint)
 
                     Text("TEMPLATE")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
@@ -215,7 +253,7 @@ struct RoutineTaskTemplateDetailView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(.white.opacity(0.06), in: Capsule())
+                .routineTemplateDarkInset(in: Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
             }
             .frame(maxWidth: .infinity)
@@ -305,11 +343,15 @@ struct RoutineTaskTemplateDetailView: View {
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(active ? .white : .white.opacity(0.25))
                     .frame(width: 34, height: 30)
-                    .background(
-                        active
-                        ? AnyShapeStyle(tint)
-                        : AnyShapeStyle(Color.white.opacity(0.06))
-                    )
+                    .background {
+                        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+
+                        if active {
+                            shape.fill(tint)
+                        } else {
+                            shape.fill(Color.black.opacity(0.34))
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
         }
@@ -352,6 +394,7 @@ struct RoutineTaskTemplateDetailView: View {
                             .scaledToFit()
                             .frame(width: 11, height: 11)
                             .foregroundStyle(tint)
+                            .bubblyIconMaterial(tint: tint)
 
                         Text(supply.name)
                             .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -359,7 +402,7 @@ struct RoutineTaskTemplateDetailView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(.white.opacity(0.06))
+                    .routineTemplateDarkInset(in: Capsule())
                     .clipShape(Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
                 }
@@ -393,6 +436,7 @@ struct RoutineTaskTemplateDetailView: View {
                                             .scaledToFit()
                                             .frame(width: 12, height: 12)
                                             .foregroundStyle(LColors.success)
+                                            .bubblyIconMaterial(tint: tint)
 
                                         Text(solution)
                                             .font(.system(size: 13, design: .rounded))
@@ -441,34 +485,49 @@ struct RoutineTaskTemplateDetailView: View {
 
     private func actionButtonLabel(title: String, icon: String, filled: Bool) -> some View {
         HStack(spacing: 8) {
-            Image(icon)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 15, height: 15)
-                .foregroundStyle(
-                    filled
-                        ? AnyShapeStyle(tint.wcagContrastingSolidTextColor)
-                        : AnyShapeStyle(tint)
-                )
-                .wcagContrastLift(on: tint, isActive: filled)
+            if filled {
+                Image(icon)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 15, height: 15)
+                    .foregroundStyle(Color.white)
+                    .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
 
-            Text(title)
-                .font(.system(size: 14, weight: .black, design: .rounded))
-                .foregroundStyle(filled ? tint.wcagContrastingSolidTextColor : .white.opacity(0.85))
-                .wcagContrastLift(on: tint, isActive: filled)
+                Text(title)
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .foregroundStyle(Color.white)
+                    .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
+            } else {
+                Image(icon)
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 15, height: 15)
+                    .foregroundStyle(tint)
+                    .wcagContrastLift(on: tint, isActive: false)
+                    .bubblyIconMaterial(tint: tint)
+
+                Text(title)
+                    .font(.system(size: 14, weight: .black, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .wcagContrastLift(on: tint, isActive: false)
+            }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 52)
+        .frame(height: 48)
         .background {
             if filled {
-                RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint)
+                BubblyCardMaterial(
+                    tint: tint,
+                    cornerRadius: 16
+                )
             } else {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(tint.opacity(0.12))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.white.opacity(0.06))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(tint.opacity(0.55), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.white.opacity(0.12), lineWidth: 1)
                     )
             }
         }
@@ -484,6 +543,7 @@ struct RoutineTaskTemplateDetailView: View {
                 .scaledToFit()
                 .frame(width: 20, height: 20)
                 .foregroundStyle(tint)
+                .bubblyIconMaterial(tint: tint)
             Text(title)
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
@@ -507,21 +567,16 @@ struct RoutineTaskTemplateDetailView: View {
     }
 
     private func tintedCard<Content: View>(
+        role: LureliaUserChoiceSurfaceRole = .supporting,
         @ViewBuilder content: () -> Content
     ) -> some View {
         content()
             .padding(18)
             .background {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(LColors.glassSurface)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(tint.opacity(0.14))
-                    }
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(tint.opacity(0.45), lineWidth: 1)
+                BubblyCardMaterial(
+                    tint: tint,
+                    cornerRadius: 22
+                )
             }
     }
 
@@ -547,6 +602,7 @@ struct RoutineTaskTemplateDetailView: View {
             .scaledToFit()
             .frame(width: 24, height: 24)
             .foregroundStyle(dimmed ? tint.opacity(0.45) : tint)
+            .bubblyIconMaterial(tint: tint)
     }
 
     private func metricTile(icon: String, label: String, value: String) -> some View {
@@ -557,6 +613,7 @@ struct RoutineTaskTemplateDetailView: View {
                 .scaledToFit()
                 .frame(width: 18, height: 18)
                 .foregroundStyle(tint)
+                .bubblyIconMaterial(tint: tint)
 
             Text(label.uppercased())
                 .font(.system(size: 9, weight: .semibold, design: .rounded))
@@ -571,7 +628,7 @@ struct RoutineTaskTemplateDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.white.opacity(0.055))
+        .routineTemplateDarkInset(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)

@@ -493,24 +493,19 @@ struct LureliaDueRoutinesWidgetView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(tint.opacity(0.18))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(tint.opacity(0.42), lineWidth: 1)
-        )
+        .background {
+            BubblyCardMaterial(tint: tint, cornerRadius: 12)
+                .allowsHitTesting(false)
+        }
     }
 
     private func statusPill(_ status: LureliaWidgetTaskStatus, tint: Color) -> some View {
-        // For Due Now the fill is the habit-color tint at near-full opacity,
-        // so the label needs to adapt to the tint's luminance — dark ink on
-        // a bright routine color, light ink on a dark one. Soon uses a
-        // dim translucent-white fill and stays plain white.
+        let materialTint: Color = status == .dueNow
+            ? tint
+            : LColors.neutralPearl
         let foreground: Color = status == .dueNow
             ? tint.adaptivePrimaryText
-            : .white
+            : .black
 
         return Text(status.rawValue.uppercased())
             .font(.system(size: 8, weight: .black, design: .rounded))
@@ -518,14 +513,10 @@ struct LureliaDueRoutinesWidgetView: View {
             .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(
-                        status == .dueNow
-                        ? tint.opacity(0.9)
-                        : Color.white.opacity(0.14)
-                    )
-            )
+            .background {
+                BubblyIconMaterial(tint: materialTint)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
     }
 
     /// Skip button — bare `skipwavy` glyph tinted with the routine color.
@@ -538,18 +529,20 @@ struct LureliaDueRoutinesWidgetView: View {
         Button(intent: SkipRoutineTaskWidgetIntent(taskID: task.actionID)) {
             Group {
                 if let uiImage = LureliaWidgetShared.widgetIcon(for: "skipwavy") {
-                    tint
-                        .mask(
+                    BubblyIconMaterial(tint: tint)
+                        .mask {
                             Image(uiImage: uiImage)
                                 .renderingMode(.template)
                                 .resizable()
                                 .scaledToFit()
-                        )
+                        }
                 } else {
-                    Image(systemName: "forward.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(tint)
+                    BubblyIconMaterial(tint: tint)
+                        .mask {
+                            Image(systemName: "forward.fill")
+                                .resizable()
+                                .scaledToFit()
+                        }
                 }
             }
             .frame(width: 24, height: 24)
@@ -566,11 +559,14 @@ struct LureliaDueRoutinesWidgetView: View {
         tint: Color
     ) -> some View {
         Button(intent: CompleteRoutineTaskWidgetIntent(taskID: task.actionID)) {
-            Circle()
-                .strokeBorder(tint, lineWidth: 1.6)
-                .background(Circle().fill(tint.opacity(0.16)))
-                .frame(width: 24, height: 24)
-                .contentShape(Circle())
+            ZStack {
+                BubblyIconMaterial(tint: tint)
+                    .mask {
+                        Circle().strokeBorder(lineWidth: 1.6)
+                    }
+            }
+            .frame(width: 24, height: 24)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Complete \(task.title)")
@@ -582,20 +578,24 @@ struct LureliaDueRoutinesWidgetView: View {
         let iconName = trimmed.isEmpty ? "sparkle" : trimmed
 
         if let uiImage = LureliaWidgetShared.widgetIcon(for: iconName) {
-            tint
-                .mask(
+            BubblyIconMaterial(tint: tint)
+                .mask {
                     Image(uiImage: uiImage)
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                )
+                }
                 .frame(width: size, height: size)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         } else {
-            Image(systemName: iconName)
-                .resizable()
-                .scaledToFit()
+            BubblyIconMaterial(tint: tint)
+                .mask {
+                    Image(systemName: iconName)
+                        .resizable()
+                        .scaledToFit()
+                }
                 .frame(width: size, height: size)
-                .foregroundStyle(tint)
+                .shadow(color: .black.opacity(0.55), radius: 1.5, x: 0, y: 1)
         }
     }
 }

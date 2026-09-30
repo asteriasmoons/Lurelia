@@ -2,10 +2,11 @@
 //  LureliaEventEditorView.swift
 //  Lurelia
 //
-//  New/edit event sheet. Uses only GlassCard + LGradients.header colors.
-//  Schedule is collapsed into a summary card that opens
-//  LureliaEventScheduleSheet. Category uses LureliaGradientDropdown with
-//  predefined LureliaEventCategory options. Recurrence uses
+//  New/edit event sheet. Date and time drums are edited inline in the
+//  Schedule card. The selected primary calendar drives the form-element tint.
+//  Category
+//  uses LureliaGradientDropdown with predefined LureliaEventCategory
+//  options. Recurrence uses
 //  LureliaGradientStepper and LureliaGradientDropdown. Reminders are
 //  tap-tiles instead of toggles. Attachments are their own card with a
 //  real photo + file picker, saved into Documents/EventAttachments/.
@@ -18,13 +19,50 @@ import UIKit
 import UniformTypeIdentifiers
 import WidgetKit
 
+private struct EventDarkMaterialModifier: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .foregroundStyle(Color.black)
+                .bubblyIconMaterial(tint: .black)
+                .overlay {
+                    content.foregroundStyle(Color.black.opacity(0.78))
+                }
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    func eventDarkMaterial(isEnabled: Bool = true) -> some View {
+        modifier(EventDarkMaterialModifier(isEnabled: isEnabled))
+    }
+}
+
 struct LureliaEventEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     let event: LureliaEvent?
     let tags: [LureliaEventTag]
     @Bindable var settings: UserSettings
+
+    init(
+        event: LureliaEvent?,
+        tags: [LureliaEventTag],
+        settings: UserSettings,
+        initialCalendar: LureliaCalendar? = nil
+    ) {
+        self.event = event
+        self.tags = tags
+        self.settings = settings
+        _selectedLureliaCalendar = State(initialValue: initialCalendar ?? event?.calendar)
+    }
 
     @StateObject private var eventService = LureliaEventService.shared
 
@@ -45,6 +83,10 @@ struct LureliaEventEditorView: View {
     @State private var endDate = Date().addingTimeInterval(3600)
     @State private var startTime = Date()
     @State private var endTime = Date().addingTimeInterval(3600)
+    @State private var startHour = 9
+    @State private var startMinute = 0
+    @State private var endHour = 10
+    @State private var endMinute = 0
     @State private var isAllDay = false
     @State private var locationName = ""
     @State private var address = ""
@@ -63,7 +105,6 @@ struct LureliaEventEditorView: View {
     @State private var syncWithAppleCalendar = false
     @State private var selectedCalendarID: String?
     @State private var showIconPicker = false
-    @State private var showScheduleSheet = false
 
     // Attachments (file-picker driven)
     @State private var photoSelection: [PhotosPickerItem] = []
@@ -72,12 +113,45 @@ struct LureliaEventEditorView: View {
     @State private var originalAttachmentIDs: Set<UUID> = []
 
     private var isEditing: Bool { event != nil }
-    private var canSave: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            selectedLureliaCalendar != nil
+    }
+
+    private var eventTint: Color {
+        guard let colorHex = selectedLureliaCalendar?.color,
+              !colorHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return theme.palette.primaryAction }
+
+        return Color(lureliaHex: colorHex)
+    }
+
+    private var eventTintIdentity: String {
+        guard let selectedLureliaCalendar else {
+            return "theme-primary"
+        }
+
+        return "\(selectedLureliaCalendar.id.uuidString)|\(selectedLureliaCalendar.color)"
+    }
+
+    private var primaryCalendarSelection: Binding<LureliaCalendar?> {
+        Binding(
+            get: { selectedLureliaCalendar },
+            set: { newCalendar in
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    selectedLureliaCalendar = newCalendar
+                    if let newCalendar {
+                        additionalCalendarIDs.remove(newCalendar.id)
+                    }
+                }
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                LureliaBackgroundAlt()
+                theme.palette.background
                     .ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
@@ -104,6 +178,7 @@ struct LureliaEventEditorView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
                     .padding(.bottom, 60)
+                    .animation(.easeInOut(duration: 0.18), value: eventTintIdentity)
                 }
                 .scrollDismissesKeyboard(.interactively)
             }
@@ -119,15 +194,6 @@ struct LureliaEventEditorView: View {
             .sheet(isPresented: $showIconPicker) {
                 IconPickerView(selectedIcon: $icon)
             }
-            .sheet(isPresented: $showScheduleSheet) {
-                LureliaEventScheduleSheet(
-                    isAllDay: $isAllDay,
-                    startDate: $startDate,
-                    endDate: $endDate,
-                    startTime: $startTime,
-                    endTime: $endTime
-                )
-            }
             .fileImporter(
                 isPresented: $showFileImporter,
                 allowedContentTypes: [.item],
@@ -138,8 +204,13 @@ struct LureliaEventEditorView: View {
             .onChange(of: photoSelection) { _, newItems in
                 ingestPhotoSelection(newItems)
             }
+            .onChange(of: startHour) { _, _ in commitStartTime() }
+            .onChange(of: startMinute) { _, _ in commitStartTime() }
+            .onChange(of: endHour) { _, _ in commitEndTime() }
+            .onChange(of: endMinute) { _, _ in commitEndTime() }
             .task {
                 load()
+                loadScheduleDrumValues()
                 eventService.refreshAuthorizationStatus()
                 // Prefer the user's explicit Sync-To-Calendar pick; fall back
                 // to their first visible Apple calendar, then to the first
@@ -186,16 +257,43 @@ struct LureliaEventEditorView: View {
 
     // MARK: - Basic cards
 
+    private func eventEditorCard<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .padding(LSpacing.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(theme.palette.surface)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(eventTint, lineWidth: 1)
+            }
+    }
+
+    private func eventSectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(theme.palette.textSecondary)
+    }
+
     private var iconCard: some View {
         Button { showIconPicker = true } label: {
-            GlassCard {
+            eventEditorCard {
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
-                            .fill(Color.white.opacity(0.08))
+                            .fill(Color.black.opacity(0.56))
                             .frame(width: 48, height: 48)
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(eventTint, lineWidth: 1)
+                            }
                         LureliaIconView(iconId: icon, size: 23)
-                            .foregroundStyle(LGradients.header)
+                            .foregroundStyle(eventTint)
+                            .bubblyIconMaterial(tint: eventTint)
                     }
                     .frame(width: 48, height: 48)
 
@@ -214,8 +312,9 @@ struct LureliaEventEditorView: View {
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 12, height: 12)
-                        .foregroundStyle(LGradients.header)
+                        .frame(width: 16, height: 16)
+                        .foregroundStyle(eventTint)
+                        .bubblyIconMaterial(tint: eventTint)
                 }
             }
         }
@@ -223,7 +322,7 @@ struct LureliaEventEditorView: View {
     }
 
     private var titleCard: some View {
-        GlassCard {
+        eventEditorCard {
             TextField("Event title", text: $title)
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
@@ -232,7 +331,7 @@ struct LureliaEventEditorView: View {
     }
 
     private var descriptionCard: some View {
-        GlassCard {
+        eventEditorCard {
             ZStack(alignment: .topLeading) {
                 if description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Description...")
@@ -252,176 +351,198 @@ struct LureliaEventEditorView: View {
     }
 
     private var categoryCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("CATEGORY")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+        VStack(alignment: .leading, spacing: 10) {
+            eventSectionLabel("CATEGORY")
 
-                LureliaGradientDropdown(
-                    placeholder: "Choose a category",
-                    options: LureliaEventCategory.allCases,
-                    selection: $category,
-                    allowsClear: true,
-                    label: { $0.rawValue }
-                )
-            }
+            LureliaGradientDropdown(
+                placeholder: "Choose a category",
+                options: LureliaEventCategory.allCases,
+                selection: $category,
+                allowsClear: true,
+                label: { $0.rawValue },
+                tint: eventTint,
+                usesCardMaterial: true,
+                usesDarkTypography: true,
+                maxVisibleOptions: 4
+            )
         }
     }
 
     private var calendarCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("PRIMARY CALENDAR")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+        VStack(alignment: .leading, spacing: 10) {
+            eventSectionLabel("PRIMARY CALENDAR")
 
-                if lureliaCalendars.isEmpty {
-                    Text("No calendars yet. Create one from the Events header to group your events.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.55))
-                } else {
-                    LureliaGradientDropdown(
-                        placeholder: "Choose a calendar",
-                        options: lureliaCalendars,
-                        selection: $selectedLureliaCalendar,
-                        allowsClear: true,
-                        label: { $0.name.isEmpty ? "Untitled" : $0.name }
-                    )
-                    // If the user picks a Primary that used to be in the
-                    // Additional list, drop it from Additional so the
-                    // invariant holds: primary is never also additional.
-                    .onChange(of: selectedLureliaCalendar) { _, newValue in
-                        if let newValue {
-                            additionalCalendarIDs.remove(newValue.id)
-                        }
-                    }
+            if lureliaCalendars.isEmpty {
+                Text("No calendars yet. Create one from the Events header to group your events.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            } else {
+                LureliaGradientDropdown(
+                    placeholder: "Choose a calendar",
+                    options: lureliaCalendars,
+                    selection: primaryCalendarSelection,
+                    allowsClear: false,
+                    label: { $0.name.isEmpty ? "Untitled" : $0.name },
+                    tint: eventTint,
+                    usesCardMaterial: true,
+                    usesDarkTypography: true
+                )
 
-                    Text("Determines the event's color across the app and widgets.")
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
+                Text("Determines the event's color across the app and widgets.")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
             }
         }
     }
 
     private var additionalCalendarsCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("ADDITIONAL CALENDARS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+        VStack(alignment: .leading, spacing: 10) {
+            eventSectionLabel("ADDITIONAL CALENDARS")
 
-                if lureliaCalendars.isEmpty {
-                    Text("No calendars available.")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.55))
-                } else {
-                    // Same dropdown UI/style as the Primary Calendar picker,
-                    // only multi-select. `optionsFilter` hides the currently
-                    // chosen primary so it can never be selected as an
-                    // additional calendar — the invariant is enforced at
-                    // the picker level, not just at save-time.
-                    LureliaGradientMultiSelectDropdown(
-                        placeholder: "Choose additional calendars",
-                        options: lureliaCalendars,
-                        selection: $additionalCalendarIDs,
-                        label: { $0.name.isEmpty ? "Untitled" : $0.name },
-                        optionsFilter: { $0.id != selectedLureliaCalendar?.id }
-                    )
+            if lureliaCalendars.isEmpty {
+                Text("No calendars available.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
+            } else {
+                LureliaGradientMultiSelectDropdown(
+                    placeholder: "Choose additional calendars",
+                    options: lureliaCalendars,
+                    selection: $additionalCalendarIDs,
+                    label: { $0.name.isEmpty ? "Untitled" : $0.name },
+                    optionsFilter: { $0.id != selectedLureliaCalendar?.id },
+                    tint: eventTint,
+                    usesCardMaterial: true,
+                    usesDarkTypography: true
+                )
 
-                    Text("Optional. This event will appear under each selected calendar. Additional calendars do not change the event's color.")
-                        .font(.system(size: 11, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.4))
-                }
+                Text("Optional. This event will appear under each selected calendar. Additional calendars do not change the event's color.")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(theme.palette.textSecondary)
             }
         }
     }
 
-    // MARK: - Collapsed Schedule Card
+    // MARK: - Schedule
 
     private var scheduleCard: some View {
-        Button { showScheduleSheet = true } label: {
-            GlassCard {
+        eventEditorCard {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("SCHEDULE")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-
-                        Text(scheduleSummary)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text("SCHEDULE")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
 
                     Spacer()
 
-                    Image("chevright")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 14, height: 14)
-                        .foregroundStyle(LGradients.header)
+                    Text("All Day")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(theme.palette.textPrimary)
+
+                    LureliaSlidingIconToggle(
+                        isOn: $isAllDay,
+                        iconName: "ringstarcal",
+                        accentColor: eventTint,
+                        accessibilityLabel: "All Day",
+                        usesIconMaterial: true
+                    )
+                }
+
+                inlineScheduleRow(
+                    title: "STARTS",
+                    date: $startDate,
+                    hour: $startHour,
+                    minute: $startMinute
+                )
+
+                Divider()
+                    .overlay(Color.white.opacity(0.12))
+
+                inlineScheduleRow(
+                    title: "ENDS",
+                    date: $endDate,
+                    hour: $endHour,
+                    minute: $endMinute
+                )
+            }
+        }
+    }
+
+    private func inlineScheduleRow(
+        title: String,
+        date: Binding<Date>,
+        hour: Binding<Int>,
+        minute: Binding<Int>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+
+            if isAllDay {
+                LureliaGradientDateDrumPicker(
+                    date: date,
+                    tint: eventTint,
+                    usesCardMaterial: true,
+                    usesDarkTypography: true
+                )
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    LureliaCompactDateDrumPicker(
+                        date: date,
+                        tint: eventTint,
+                        usesCardMaterial: true,
+                        usesDarkTypography: true
+                    )
+                        .frame(maxWidth: .infinity)
+
+                    LureliaCompactTimeDrumPicker(
+                        hour: hour,
+                        minute: minute,
+                        tint: eventTint,
+                        usesDarkTypography: true
+                    )
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
-        .buttonStyle(.plain)
-    }
-
-    private var scheduleSummary: String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "MMM d, yyyy"
-
-        let timeFormatter = DateFormatter()
-        timeFormatter.dateFormat = "h:mm a"
-
-        let cal = Calendar.current
-        let sameDay = cal.isDate(startDate, inSameDayAs: endDate)
-
-        if isAllDay {
-            if sameDay {
-                return "\(dateFormatter.string(from: startDate)) · All day"
-            }
-            return "\(dateFormatter.string(from: startDate)) → \(dateFormatter.string(from: endDate)) · All day"
-        }
-
-        if sameDay {
-            return "\(dateFormatter.string(from: startDate))\n\(timeFormatter.string(from: startTime)) – \(timeFormatter.string(from: endTime))"
-        }
-        return "\(dateFormatter.string(from: startDate)) \(timeFormatter.string(from: startTime))\n→ \(dateFormatter.string(from: endDate)) \(timeFormatter.string(from: endTime))"
     }
 
     // MARK: - Recurrence
 
     private var recurrenceCard: some View {
-        GlassCard {
+        eventEditorCard {
             VStack(alignment: .leading, spacing: 14) {
                 Text("RECURRENCE")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
 
-                Toggle(isOn: $recurrenceEnabled) {
+                HStack(spacing: 12) {
                     Text("Repeats")
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.palette.textPrimary)
+
+                    Spacer()
+
+                    LureliaSlidingIconToggle(
+                        isOn: $recurrenceEnabled,
+                        iconName: "repeat",
+                        accentColor: eventTint,
+                        accessibilityLabel: "Repeats",
+                        usesIconMaterial: true
+                    )
                 }
-                .tint(Color.white.opacity(0.85))
 
                 if recurrenceEnabled {
-                    Picker("Frequency", selection: $recurrenceFrequency) {
-                        ForEach(LureliaEventFrequency.allCases) { frequency in
-                            Text(frequency.label).tag(frequency)
-                        }
-                    }
-                    .pickerStyle(.segmented)
+                    recurrenceFrequencyPicker
 
                     LureliaGradientStepper(
                         title: "Every",
                         subtitle: recurrenceInterval == 1 ? recurrenceFrequency.rawValue : recurrenceFrequency.rawValue + "s",
                         value: $recurrenceInterval,
-                        range: 1...30
+                        range: 1...30,
+                        tint: eventTint,
+                        showsContainer: false,
+                        usesTintedMaterialButtons: true
                     )
 
                     if recurrenceFrequency == .weekly {
@@ -444,7 +565,10 @@ struct LureliaEventEditorView: View {
                             placeholder: "Never",
                             options: LureliaEventRecurrenceEndType.allCases,
                             selection: $recurrenceEndType,
-                            label: { $0.label }
+                            label: { $0.label },
+                            tint: eventTint,
+                            usesCardMaterial: true,
+                            usesDarkTypography: true
                         )
                     }
 
@@ -456,16 +580,55 @@ struct LureliaEventEditorView: View {
                         )
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
-                        .tint(Color.white.opacity(0.85))
+                        .tint(eventTint)
                     } else if recurrenceEndType == .afterOccurrences {
                         LureliaGradientStepper(
                             title: "After",
                             subtitle: recurrenceCount == 1 ? "event" : "events",
                             value: $recurrenceCount,
-                            range: 1...999
+                            range: 1...999,
+                            tint: eventTint,
+                            showsContainer: false,
+                            usesTintedMaterialButtons: true
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private var recurrenceFrequencyPicker: some View {
+        HStack(spacing: 6) {
+            ForEach(LureliaEventFrequency.allCases) { frequency in
+                let isSelected = recurrenceFrequency == frequency
+
+                Button {
+                    recurrenceFrequency = frequency
+                } label: {
+                    Text(frequency.label)
+                        .font(.system(size: 12, weight: .black, design: .rounded))
+                        .foregroundStyle(isSelected ? Color.black : theme.palette.textPrimary)
+                        .eventDarkMaterial(isEnabled: isSelected)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background {
+                            if isSelected {
+                                BubblyIconMaterial(tint: eventTint)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            } else {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(theme.palette.surface)
+                            }
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(
+                                    isSelected ? eventTint : theme.palette.textPrimary.opacity(0.12),
+                                    lineWidth: 1
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -482,18 +645,25 @@ struct LureliaEventEditorView: View {
         } label: {
             Text(weekday.shortLabel)
                 .font(.system(size: 11, weight: .black, design: .rounded))
-                .foregroundStyle(isSelected ? LColors.bg : .white.opacity(0.7))
+                .foregroundStyle(isSelected ? Color.black : theme.palette.textPrimary)
+                .eventDarkMaterial(isEnabled: isSelected)
                 .frame(width: 34, height: 34)
-                .background(
-                    isSelected ? AnyShapeStyle(LGradients.header) : AnyShapeStyle(Color.white.opacity(0.06)),
-                    in: Circle()
-                )
-                .overlay(
-                    Circle().strokeBorder(
-                        isSelected ? AnyShapeStyle(Color.clear) : AnyShapeStyle(Color.white.opacity(0.14)),
-                        lineWidth: 1
-                    )
-                )
+                .background {
+                    if isSelected {
+                        BubblyIconMaterial(tint: eventTint)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(theme.palette.surface)
+                    }
+                }
+                .overlay {
+                    Circle()
+                        .strokeBorder(
+                            isSelected ? eventTint : theme.palette.textPrimary.opacity(0.12),
+                            lineWidth: 1
+                        )
+                }
         }
         .buttonStyle(.plain)
     }
@@ -501,22 +671,18 @@ struct LureliaEventEditorView: View {
     // MARK: - Reminders (tap tiles)
 
     private var reminderCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("REMINDERS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+        VStack(alignment: .leading, spacing: 14) {
+            eventSectionLabel("REMINDERS")
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 8),
-                        GridItem(.flexible(), spacing: 8)
-                    ],
-                    spacing: 8
-                ) {
-                    ForEach(LureliaEventNotificationOffset.allCases) { offset in
-                        reminderTile(offset)
-                    }
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8)
+                ],
+                spacing: 8
+            ) {
+                ForEach(LureliaEventNotificationOffset.allCases) { offset in
+                    reminderTile(offset)
                 }
             }
         }
@@ -534,22 +700,28 @@ struct LureliaEventEditorView: View {
         } label: {
             Text(offset.label)
                 .font(.system(size: 12, weight: .black, design: .rounded))
-                .foregroundStyle(isSelected ? LColors.bg : .white.opacity(0.72))
+                .foregroundStyle(isSelected ? Color.black : theme.palette.textPrimary)
+                .eventDarkMaterial(isEnabled: isSelected)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(
-                    isSelected ? AnyShapeStyle(LGradients.header) : AnyShapeStyle(Color.white.opacity(0.06)),
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                )
-                .overlay(
+                .background {
+                    if isSelected {
+                        BubblyIconMaterial(tint: eventTint)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(theme.palette.surface)
+                    }
+                }
+                .overlay {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .strokeBorder(
-                            isSelected ? AnyShapeStyle(Color.clear) : AnyShapeStyle(Color.white.opacity(0.12)),
+                            isSelected ? eventTint : theme.palette.textPrimary.opacity(0.12),
                             lineWidth: 1
                         )
-                )
+                }
         }
         .buttonStyle(.plain)
     }
@@ -557,7 +729,7 @@ struct LureliaEventEditorView: View {
     // MARK: - Location
 
     private var locationCard: some View {
-        GlassCard {
+        eventEditorCard {
             VStack(alignment: .leading, spacing: 14) {
                 Text("LOCATION")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -574,7 +746,8 @@ struct LureliaEventEditorView: View {
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 18, height: 18)
-                                .foregroundStyle(.white.opacity(0.75))
+                                .foregroundStyle(eventTint)
+                                .bubblyIconMaterial(tint: eventTint)
 
                             Text("Search for a place…")
                                 .font(.system(size: 15, weight: .semibold, design: .rounded))
@@ -614,15 +787,12 @@ struct LureliaEventEditorView: View {
 
                             Spacer()
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.white.opacity(0.14))
-                        )
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                                .strokeBorder(eventTint, lineWidth: 1)
                         )
                         .contentShape(Rectangle())
                     }
@@ -649,7 +819,8 @@ struct LureliaEventEditorView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 16, height: 16)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(eventTint)
+                .bubblyIconMaterial(tint: eventTint)
 
             Text(locationName)
                 .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -660,21 +831,22 @@ struct LureliaEventEditorView: View {
             Button {
                 clearLocation()
             } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.white.opacity(0.55))
-                    .imageScale(.medium)
+                Image("xmarkwavy")
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+                    .foregroundStyle(eventTint)
+                    .bubblyIconMaterial(tint: eventTint)
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.14))
-        )
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+                .strokeBorder(eventTint, lineWidth: 1)
         )
     }
 
@@ -688,7 +860,7 @@ struct LureliaEventEditorView: View {
     // MARK: - Notes (no longer holds attachments)
 
     private var notesCard: some View {
-        GlassCard {
+        eventEditorCard {
             VStack(alignment: .leading, spacing: 14) {
                 Text("NOTES")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -716,34 +888,30 @@ struct LureliaEventEditorView: View {
     // MARK: - Attachments (photo + file picker)
 
     private var attachmentsCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("ATTACHMENTS")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
+        VStack(alignment: .leading, spacing: 14) {
+            eventSectionLabel("ATTACHMENTS")
 
-                HStack(spacing: 10) {
-                    PhotosPicker(
-                        selection: $photoSelection,
-                        maxSelectionCount: 10,
-                        matching: .images
-                    ) {
-                        attachmentActionLabel(iconAsset: "starcal", title: "Add Photo")
-                    }
-
-                    Button {
-                        showFileImporter = true
-                    } label: {
-                        attachmentActionLabel(iconAsset: "notespen", title: "Add File")
-                    }
-                    .buttonStyle(.plain)
+            HStack(spacing: 10) {
+                PhotosPicker(
+                    selection: $photoSelection,
+                    maxSelectionCount: 10,
+                    matching: .images
+                ) {
+                    attachmentActionLabel(iconAsset: "starcal", title: "Add Photo")
                 }
 
-                if !attachmentDrafts.isEmpty {
-                    VStack(spacing: 8) {
-                        ForEach(attachmentDrafts) { draft in
-                            attachmentRow(draft)
-                        }
+                Button {
+                    showFileImporter = true
+                } label: {
+                    attachmentActionLabel(iconAsset: "notespen", title: "Add File")
+                }
+                .buttonStyle(.plain)
+            }
+
+            if !attachmentDrafts.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(attachmentDrafts) { draft in
+                        attachmentRow(draft)
                     }
                 }
             }
@@ -757,28 +925,20 @@ struct LureliaEventEditorView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 16, height: 16)
-                .foregroundStyle(LGradients.header)
+                .eventDarkMaterial()
 
             Text(title)
                 .font(.system(size: 13, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
+                .eventDarkMaterial()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background {
+            BubblyCardMaterial(tint: eventTint, cornerRadius: 14)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.85).opacity(0.5),
-                            Color.white.opacity(0.85).opacity(0.5)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    lineWidth: 1
-                )
+                .strokeBorder(eventTint, lineWidth: 1)
         )
     }
 
@@ -789,7 +949,8 @@ struct LureliaEventEditorView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 16, height: 16)
-                .foregroundStyle(LGradients.header)
+                .foregroundStyle(eventTint)
+                .bubblyIconMaterial(tint: eventTint)
 
             Text(draft.title)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -812,28 +973,37 @@ struct LureliaEventEditorView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(eventTint, lineWidth: 1)
         )
     }
 
     // MARK: - Apple Calendar
 
     private var appleCalendarCard: some View {
-        GlassCard {
+        eventEditorCard {
             VStack(alignment: .leading, spacing: 14) {
                 Text("APPLE CALENDAR")
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
 
-                Toggle(isOn: $syncWithAppleCalendar) {
+                HStack(spacing: 12) {
                     Text("Sync This Event")
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.palette.textPrimary)
+
+                    Spacer()
+
+                    LureliaSlidingIconToggle(
+                        isOn: $syncWithAppleCalendar,
+                        iconName: "cloudsync",
+                        accentColor: eventTint,
+                        accessibilityLabel: "Sync This Event",
+                        usesIconMaterial: true
+                    )
                 }
-                .tint(Color.white.opacity(0.85))
 
                 if syncWithAppleCalendar {
                     if eventService.hasCalendarAccess {
@@ -846,7 +1016,10 @@ struct LureliaEventEditorView: View {
                             ),
                             label: { id in
                                 eventService.appleCalendars.first(where: { $0.id == id })?.title ?? id
-                            }
+                            },
+                            tint: eventTint,
+                            usesCardMaterial: true,
+                            usesDarkTypography: true
                         )
                     } else {
                         Button {
@@ -854,10 +1027,11 @@ struct LureliaEventEditorView: View {
                         } label: {
                             Text("Connect Apple Calendar")
                                 .font(.system(size: 14, weight: .black, design: .rounded))
-                                .foregroundStyle(LColors.textPrimary)
+                                .foregroundStyle(.black)
+                                .eventDarkMaterial()
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 46)
-                                .background { LureliaNeutralGlassSurface(cornerRadius: 16) }
+                                .background { BubblyCardMaterial(tint: eventTint, cornerRadius: 16) }
                         }
                         .buttonStyle(.plain)
                     }
@@ -872,13 +1046,13 @@ struct LureliaEventEditorView: View {
         Button { save() } label: {
             Text(isEditing ? "Save Event" : "Create Event")
                 .font(.system(size: 16, weight: .black, design: .rounded))
-                .foregroundStyle(LColors.textPrimary)
+                .foregroundStyle(.black)
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
-                .background { LureliaNeutralGlassSurface(cornerRadius: 22) }
+                .background { BubblyCardMaterial(tint: eventTint, cornerRadius: 22) }
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .strokeBorder(LColors.neutralPearl.opacity(0.12), lineWidth: 1)
+                        .strokeBorder(eventTint, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -936,6 +1110,54 @@ struct LureliaEventEditorView: View {
             )
         }
         originalAttachmentIDs = Set(existing.map(\.id))
+    }
+
+    private func loadScheduleDrumValues() {
+        let startComponents = Calendar.current.dateComponents(
+            [.hour, .minute],
+            from: startTime
+        )
+        startHour = startComponents.hour ?? 9
+        startMinute = startComponents.minute ?? 0
+
+        let endComponents = Calendar.current.dateComponents(
+            [.hour, .minute],
+            from: endTime
+        )
+        endHour = endComponents.hour ?? 10
+        endMinute = endComponents.minute ?? 0
+    }
+
+    private func commitStartTime() {
+        var components = Calendar.current.dateComponents(
+            [.year, .month, .day],
+            from: startTime
+        )
+        components.hour = startHour
+        components.minute = startMinute
+        components.second = 0
+
+        guard let newTime = Calendar.current.date(from: components),
+              newTime != startTime
+        else { return }
+
+        startTime = newTime
+    }
+
+    private func commitEndTime() {
+        var components = Calendar.current.dateComponents(
+            [.year, .month, .day],
+            from: endTime
+        )
+        components.hour = endHour
+        components.minute = endMinute
+        components.second = 0
+
+        guard let newTime = Calendar.current.date(from: components),
+              newTime != endTime
+        else { return }
+
+        endTime = newTime
     }
 
     // MARK: - Save

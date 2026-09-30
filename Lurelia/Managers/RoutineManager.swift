@@ -220,6 +220,14 @@ final class RoutineManager: ObservableObject {
         guard run.endedAt == nil else { return }
         
         run.pause()
+
+        do {
+            try run.modelContext?.save()
+        } catch {
+            print("[RoutineManager] Failed saving paused routine run: \(error)")
+        }
+
+        LureliaWidgetReloads.reloadAll()
         
         LureliaLiveActivityBridge.shared.update(
             routine: routine,
@@ -234,6 +242,14 @@ final class RoutineManager: ObservableObject {
         guard run.endedAt == nil else { return }
         
         run.resume()
+
+        do {
+            try run.modelContext?.save()
+        } catch {
+            print("[RoutineManager] Failed saving resumed routine run: \(error)")
+        }
+
+        LureliaWidgetReloads.reloadAll()
         
         LureliaLiveActivityBridge.shared.update(
             routine: routine,
@@ -266,6 +282,14 @@ final class RoutineManager: ObservableObject {
                 )
             } else {
                 sourceTask.markCompleted()
+                LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+                    for: sourceTask,
+                    on: Date()
+                )
+                LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrence(
+                    for: sourceTask,
+                    on: Date()
+                )
                 routine.refreshCurrentContractStatusIfNeeded()
             }
         }
@@ -316,6 +340,14 @@ final class RoutineManager: ObservableObject {
                 )
             } else {
                 sourceTask.markSkipped()
+                LureliaRoutineTaskOccurrenceNotifications.cancelPendingOccurrence(
+                    for: sourceTask,
+                    on: Date()
+                )
+                LureliaRoutineTaskOccurrenceAlarms.cancelPendingOccurrence(
+                    for: sourceTask,
+                    on: Date()
+                )
                 routine.refreshCurrentContractStatusIfNeeded()
             }
         }

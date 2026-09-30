@@ -210,9 +210,14 @@ final class LureliaEventService: ObservableObject {
 
     func saveToAppleCalendar(_ event: LureliaEvent, calendarIdentifier: String?) throws {
         guard hasCalendarAccess else { return }
-        if !event.isAppleImportedShadow {
-            event.markNativeLureliaEvent()
+
+        // Apple-owned shadows are display/organization records only. Never
+        // write them back through the native Lurelia -> Apple save path.
+        guard !event.isAppleImportedShadow else {
+            print("[Sync] Skipping Apple-owned shadow '\(event.title)' during Lurelia -> Apple save.")
+            return
         }
+        event.markNativeLureliaEvent()
 
         let appleEvent: EKEvent
         if let identifier = event.appleEventIdentifier,
@@ -284,7 +289,15 @@ final class LureliaEventService: ObservableObject {
 
         let descriptor = FetchDescriptor<LureliaEvent>()
         let events = (try? context.fetch(descriptor)) ?? []
-        let unmirrored = events.filter { $0.appleEventIdentifier == nil }
+
+        // Bulk export is strictly Lurelia -> Apple. Apple-imported shadows
+        // must never be pushed back into EventKit, even if their occurrence
+        // identifier is temporarily missing/stale. Treating identifier-less
+        // shadows as new native events can duplicate an Apple event/series.
+        let unmirrored = events.filter { event in
+            !event.isAppleImportedShadow &&
+                event.appleEventIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false
+        }
         guard !unmirrored.isEmpty else {
             print("[Sync] Bulk push — nothing new to mirror.")
             return
@@ -303,6 +316,17 @@ final class LureliaEventService: ObservableObject {
 
         try? context.save()
         print("[Sync] Bulk push complete — \(pushedCount) new event(s) mirrored to Apple.")
+    }
+
+    func deleteAppleOccurrence(eventIdentifier: String) throws {
+        guard hasCalendarAccess else { return }
+
+        let identifier = eventIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !identifier.isEmpty,
+              let appleEvent = eventStore.event(withIdentifier: identifier)
+        else { return }
+
+        try eventStore.remove(appleEvent, span: .thisEvent, commit: true)
     }
 
     func deleteFromAppleCalendar(_ event: LureliaEvent) throws {

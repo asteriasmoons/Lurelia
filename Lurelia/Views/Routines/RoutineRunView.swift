@@ -6,6 +6,17 @@
 import SwiftUI
 import SwiftData
 
+private extension View {
+    func routineRunTextShadow() -> some View {
+        shadow(
+            color: Color.black.opacity(0.72),
+            radius: 2,
+            x: 0,
+            y: 1
+        )
+    }
+}
+
 struct RoutineRunView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -49,7 +60,7 @@ struct RoutineRunView: View {
     
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            BubblyTileBackground(tint: routineTint)
             
             VStack(spacing: 0) {
                 topHero
@@ -144,7 +155,14 @@ extension RoutineRunView {
                                 iconId: routine.icon,
                                 size: 30
                             )
-                            .foregroundStyle(LColors.textPrimary)
+                            .foregroundStyle(routineTint)
+                            .bubblyIconMaterial(tint: routineTint)
+                            .shadow(
+                                color: Color.black.opacity(0.78),
+                                radius: 8,
+                                x: 0,
+                                y: 5
+                            )
                         }
                         
                         VStack(alignment: .leading, spacing: 6) {
@@ -157,6 +175,7 @@ extension RoutineRunView {
                                     )
                                 )
                                 .foregroundStyle(LColors.textPrimary)
+                                .routineRunTextShadow()
                                 .lineLimit(2)
                             
                             HStack(spacing: 8) {
@@ -172,11 +191,11 @@ extension RoutineRunView {
                                     )
                                 )
                                 .foregroundStyle(routineTint)
+                                .routineRunTextShadow()
                                 
                                 Text("·")
-                                    .foregroundStyle(
-                                        LColors.textSecondary.opacity(0.45)
-                                    )
+                                    .foregroundStyle(Color.black)
+                                    .routineRunTextShadow()
                                 
                                 Label(
                                     isPaused ? "Paused" : "In Progress",
@@ -191,7 +210,8 @@ extension RoutineRunView {
                                         design: .rounded
                                     )
                                 )
-                                .foregroundStyle(LColors.textSecondary)
+                                .foregroundStyle(Color.black)
+                                .routineRunTextShadow()
                             }
                         }
                     }
@@ -228,10 +248,13 @@ extension RoutineRunView {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
-                        .foregroundStyle(
-                            allDone
-                            ? routineTint
-                            : LColors.textSecondary
+                        .foregroundStyle(Color.white)
+                        .bubblyIconMaterial(tint: .white)
+                        .shadow(
+                            color: Color.black.opacity(0.78),
+                            radius: 5,
+                            x: 0,
+                            y: 3
                         )
                         .frame(width: 40, height: 40)
                         .background(
@@ -248,14 +271,21 @@ extension RoutineRunView {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
             
             actionBar
-            
-            Spacer()
-                .frame(height: 4)
         }
+        .padding(18)
+        .background {
+            BubblyCardMaterial(
+                tint: routineTint,
+                cornerRadius: 28
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .shadow(color: routineTint.opacity(0.16), radius: 16, x: 0, y: 8)
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 16)
     }
     
     private var actionBar: some View {
@@ -311,7 +341,6 @@ extension RoutineRunView {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 20)
     }
     
     private func actionButton(
@@ -331,6 +360,7 @@ extension RoutineRunView {
                         design: .rounded
                     )
                 )
+                .routineRunTextShadow()
         }
         .foregroundStyle(
             filled
@@ -343,8 +373,10 @@ extension RoutineRunView {
         .background(
             Group {
                 if filled {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(routineTint)
+                    BubblyCardMaterial(
+                        tint: routineTint,
+                        cornerRadius: 18
+                    )
                 } else {
                     RoundedRectangle(cornerRadius: 18)
                         .fill(LColors.glassSurface)
@@ -380,6 +412,7 @@ extension RoutineRunView {
                     )
                 )
                 .foregroundStyle(LColors.textPrimary)
+                .routineRunTextShadow()
             
             Text(subtitle)
                 .font(
@@ -389,7 +422,8 @@ extension RoutineRunView {
                         design: .rounded
                     )
                 )
-                .foregroundStyle(LColors.textSecondary)
+                .foregroundStyle(Color.black)
+                .routineRunTextShadow()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
@@ -444,13 +478,14 @@ extension RoutineRunView {
                             design: .rounded
                         )
                     )
-                    .foregroundStyle(LColors.textSecondary)
+                    .foregroundStyle(Color.black)
+                    .routineRunTextShadow()
                 
                 Spacer()
                 
                 if !allDone {
-                    let end = countdownEndDate()
                     TimelineView(.periodic(from: .now, by: 1)) { context in
+                        let end = countdownEndDate(at: context.date)
                         let remaining = max(0, end.timeIntervalSince(context.date))
                         let hours = Int(remaining) / 3600
                         let minutes = (Int(remaining) % 3600) / 60
@@ -458,6 +493,7 @@ extension RoutineRunView {
                         Text(String(format: "%02d:%02d:%02d", hours, minutes, seconds))
                             .font(.system(size: 12, weight: .bold, design: .rounded))
                             .foregroundStyle(routineTint)
+                            .routineRunTextShadow()
                             .monospacedDigit()
                     }
                 }
@@ -491,6 +527,7 @@ extension RoutineRunView {
                     )
                 )
                 .foregroundStyle(LColors.textPrimary)
+                .routineRunTextShadow()
             
             Text("You finished your routine flow for this session.")
                 .font(
@@ -499,9 +536,8 @@ extension RoutineRunView {
                         design: .rounded
                     )
                 )
-                .foregroundStyle(
-                    LColors.textSecondary.opacity(0.8)
-                )
+                .foregroundStyle(Color.black)
+                .routineRunTextShadow()
                 .multilineTextAlignment(.center)
             
             Button {
@@ -516,6 +552,7 @@ extension RoutineRunView {
                         )
                     )
                     .foregroundStyle(routineTint.wcagContrastingSolidTextColor)
+                    .routineRunTextShadow()
                     .wcagContrastLift(on: routineTint)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
@@ -577,27 +614,31 @@ extension RoutineRunView {
         dismiss()
     }
     
-    private func countdownEndDate() -> Date {
-        let now = Date()
-        let startDate = run?.startedAt ?? now
-        let pausedSeconds = run?.totalPausedSeconds ?? 0
+    private func countdownEndDate(at date: Date) -> Date {
+        let startDate = run?.startedAt ?? date
+        let pausedSeconds = run?.pausedDuration(at: date) ?? 0
         
         if routine.scheduleEnabled {
             let calendar = Calendar.current
-            var components = calendar.dateComponents([.year, .month, .day], from: now)
+            var components = calendar.dateComponents([.year, .month, .day], from: startDate)
             components.hour = routine.endHour
             components.minute = routine.endMinute
             components.second = 0
-            let wallClockEnd = calendar.date(from: components)
+            var wallClockEnd = calendar.date(from: components)
                 ?? startDate.addingTimeInterval(TimeInterval(routine.durationMinutes * 60))
+
+            if wallClockEnd <= startDate {
+                wallClockEnd = calendar.date(byAdding: .day, value: 1, to: wallClockEnd)
+                    ?? wallClockEnd.addingTimeInterval(86_400)
+            }
             
             // If durationMode is on and we started outside the scheduled window, use duration instead
             if routine.durationMode {
-                var startComponents = calendar.dateComponents([.year, .month, .day], from: now)
+                var startComponents = calendar.dateComponents([.year, .month, .day], from: startDate)
                 startComponents.hour = routine.startHour
                 startComponents.minute = routine.startMinute
                 startComponents.second = 0
-                let windowStart = calendar.date(from: startComponents) ?? now
+                let windowStart = calendar.date(from: startComponents) ?? startDate
                 
                 if startDate < windowStart || startDate > wallClockEnd {
                     // Started outside the window — use duration countdown
@@ -607,7 +648,7 @@ extension RoutineRunView {
                 }
             }
             
-            return wallClockEnd
+            return wallClockEnd.addingTimeInterval(pausedSeconds)
         }
         
         let durationSeconds = TimeInterval(routine.durationMinutes * 60)
@@ -666,11 +707,8 @@ struct LureliaRoutineRunTaskRow: View {
                             design: .rounded
                         )
                     )
-                    .foregroundStyle(
-                        runTask.isPending
-                        ? LColors.textPrimary
-                        : LColors.textSecondary
-                    )
+                    .foregroundStyle(runTask.isPending ? LColors.textPrimary : Color.black)
+                    .routineRunTextShadow()
                     .strikethrough(!runTask.isPending)
                 
                 if runTask.isCompleted {
@@ -683,6 +721,7 @@ struct LureliaRoutineRunTaskRow: View {
                             )
                         )
                         .foregroundStyle(routineTint.opacity(0.9))
+                        .routineRunTextShadow()
                 } else if runTask.isSkipped {
                     Text("Skipped")
                         .font(
@@ -692,7 +731,8 @@ struct LureliaRoutineRunTaskRow: View {
                                 design: .rounded
                             )
                         )
-                        .foregroundStyle(LColors.textSecondary)
+                        .foregroundStyle(Color.black)
+                        .routineRunTextShadow()
                 }
             }
             
@@ -707,19 +747,15 @@ struct LureliaRoutineRunTaskRow: View {
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
-                        .foregroundStyle(LColors.textPrimary)
+                        .foregroundStyle(routineTint)
+                        .bubblyIconMaterial(tint: routineTint)
+                        .shadow(
+                            color: Color.black.opacity(0.74),
+                            radius: 5,
+                            x: 0,
+                            y: 3
+                        )
                         .frame(width: 36, height: 36)
-                        .background(
-                            LColors.glassSurface2,
-                            in: Circle()
-                        )
-                        .overlay(
-                            Circle()
-                                .strokeBorder(
-                                    LColors.glassBorder,
-                                    lineWidth: 1
-                                )
-                        )
                 }
                 .buttonStyle(.plain)
                 .disabled(runTask.run?.isPaused == true)

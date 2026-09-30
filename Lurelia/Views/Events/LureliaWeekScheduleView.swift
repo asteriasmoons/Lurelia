@@ -6,11 +6,14 @@
 import SwiftUI
 
 struct LureliaWeekScheduleView: View {
+    @Environment(\.appTheme) private var theme
+
     @Binding var focusedDate: Date
     let localOccurrences: [LureliaEventOccurrence]
     let externalOccurrences: [LureliaExternalCalendarOccurrence]
     let events: [LureliaEvent]
     let onSelect: (LureliaEventUnifiedOccurrence) -> Void
+    let onDelete: (LureliaEventUnifiedOccurrence) -> Void
 
     private let calendar = Calendar.current
 
@@ -18,14 +21,21 @@ struct LureliaWeekScheduleView: View {
         VStack(spacing: 12) {
             HStack {
                 Button { moveWeek(-1) } label: {
-                    Image("chevleft")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 18, height: 18)
-                        .foregroundStyle(LGradients.header)
+                    ZStack {
+                        Color.clear
+
+                        Image("chevleft")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                            .bubblyIconMaterial(tint: theme.palette.indicators)
+                    }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Previous week")
 
                 Spacer()
 
@@ -36,55 +46,69 @@ struct LureliaWeekScheduleView: View {
                 Spacer()
 
                 Button { moveWeek(1) } label: {
-                    Image("chevright")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 18, height: 18)
-                        .foregroundStyle(LGradients.header)
+                    ZStack {
+                        Color.clear
+
+                        Image("chevright")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                            .bubblyIconMaterial(tint: theme.palette.indicators)
+                    }
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Next week")
             }
             .padding(.horizontal, 24)
 
             VStack(spacing: 12) {
                 ForEach(weekDays, id: \.self) { day in
-                    GlassCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
-                                    .font(.system(size: 14, weight: .black, design: .rounded))
-                                    .foregroundStyle(.white)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                                .font(.system(size: 14, weight: .black, design: .rounded))
+                                .foregroundStyle(theme.palette.textPrimary)
 
-                                Spacer()
+                            Spacer()
 
-                                Text("\(rows(on: day).count)")
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                                    .foregroundStyle(Color.white.opacity(0.85))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.white.opacity(0.85).opacity(0.14), in: Capsule())
-                            }
+                            Text("\(rows(on: day).count)")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(theme.palette.textPrimary.opacity(0.85))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(theme.palette.raisedSurface, in: Capsule())
+                        }
 
-                            let dayRows = rows(on: day)
-                            if dayRows.isEmpty {
-                                Text("No events")
-                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(LColors.textSecondary.opacity(0.7))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 7)
-                            } else {
-                                VStack(spacing: 8) {
-                                    ForEach(dayRows) { row in
-                                        LureliaEventOccurrenceRow(
-                                            row: row,
-                                            onSelect: onSelect,
-                                            style: .frosty
-                                        )
-                                    }
+                        let dayRows = rows(on: day)
+                        if dayRows.isEmpty {
+                            Text("No events")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(theme.palette.textSecondary.opacity(0.7))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 7)
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(dayRows) { row in
+                                    LureliaEventOccurrenceRow(
+                                        row: row,
+                                        onSelect: onSelect,
+                                        onDelete: onDelete
+                                    )
                                 }
                             }
                         }
+                    }
+                    .padding(LSpacing.cardPadding)
+                    .background(
+                        theme.palette.surface,
+                        in: RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: LSpacing.cardRadius, style: .continuous)
+                            .strokeBorder(LColors.glassBorder, lineWidth: 1)
                     }
                 }
             }

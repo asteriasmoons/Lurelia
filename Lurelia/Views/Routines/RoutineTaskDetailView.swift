@@ -15,9 +15,18 @@ import SwiftData
 import UIKit
 import WidgetKit
 
+private extension View {
+    func routineTaskDarkInset<S: Shape>(in shape: S) -> some View {
+        background {
+            shape.fill(Color.black.opacity(0.34))
+        }
+    }
+}
+
 struct RoutineTaskDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.appTheme) private var theme
 
     @Bindable var task: LureliaRoutineTask
     var routineTint: Color = LColors.gradientPurple
@@ -58,7 +67,7 @@ struct RoutineTaskDetailView: View {
 
     var body: some View {
         ZStack {
-            LureliaBackgroundAlt()
+            theme.palette.background
                 .ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -117,6 +126,7 @@ struct RoutineTaskDetailView: View {
                                             .scaledToFit()
                                             .frame(width: 18, height: 18)
                                             .foregroundStyle(routineTint)
+                                            .bubblyIconMaterial(tint: routineTint)
 
                                         Text(type.label)
                                             .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -124,7 +134,7 @@ struct RoutineTaskDetailView: View {
                                     }
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 8)
-                                    .background(.white.opacity(0.06))
+                                    .routineTaskDarkInset(in: Capsule())
                                     .clipShape(Capsule())
                                     .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
                                 }
@@ -235,10 +245,12 @@ struct RoutineTaskDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 17, height: 17)
-                    .foregroundStyle(adaptiveTintTextColor)
-                    .wcagContrastLift(on: routineTint)
+                    .foregroundStyle(.black)
                     .frame(width: 40, height: 40)
-                    .background(routineTint, in: Circle())
+                    .background {
+                        BubblyIconMaterial(tint: routineTint)
+                            .clipShape(Circle())
+                    }
                     .overlay {
                         Circle()
                             .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
@@ -252,10 +264,12 @@ struct RoutineTaskDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 17, height: 17)
-                    .foregroundStyle(adaptiveTintTextColor)
-                    .wcagContrastLift(on: routineTint)
+                    .foregroundStyle(.black)
                     .frame(width: 40, height: 40)
-                    .background(routineTint, in: Circle())
+                    .background {
+                        BubblyIconMaterial(tint: routineTint)
+                            .clipShape(Circle())
+                    }
                     .overlay {
                         Circle()
                             .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
@@ -274,15 +288,16 @@ struct RoutineTaskDetailView: View {
             VStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(routineTint.opacity(0.18))
+                        .fill(Color.black.opacity(0.42))
                         .frame(width: 64, height: 64)
 
                     Circle()
-                        .strokeBorder(routineTint.opacity(0.6), lineWidth: 1.15)
+                        .strokeBorder(routineTint.opacity(0.85), lineWidth: 1)
                         .frame(width: 64, height: 64)
 
                     LureliaIconView(iconId: taskIcon, size: 38)
-                        .foregroundStyle(routineTint)
+                        .foregroundStyle(Color.white.opacity(0.92))
+                        .bubblyIconMaterial(tint: routineTint)
                 }
 
                 Text(task.title)
@@ -306,6 +321,7 @@ struct RoutineTaskDetailView: View {
                             .scaledToFit()
                             .frame(width: 11, height: 11)
                             .foregroundStyle(routineTint)
+                            .bubblyIconMaterial(tint: routineTint)
 
                         Text(routineName.uppercased())
                             .font(.system(size: 10, weight: .bold, design: .rounded))
@@ -314,7 +330,7 @@ struct RoutineTaskDetailView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(.white.opacity(0.06), in: Capsule())
+                    .routineTaskDarkInset(in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
                 }
             }
@@ -471,13 +487,10 @@ struct RoutineTaskDetailView: View {
                     icon: "repeatfill",
                     filled: false
                 ) {
-                    task.resetState()
-                    do {
-                        try modelContext.save()
-                    } catch {
-                        print("🚨 [RoutineTaskDetail] reset save failed: \(error)")
-                    }
-                    LureliaWidgetReloads.reloadAll()
+                    RoutineTaskManager.shared.resetStatus(
+                        task: task,
+                        context: modelContext
+                    )
                 }
             }
         }
@@ -496,24 +509,43 @@ struct RoutineTaskDetailView: View {
             }
         } label: {
             HStack(spacing: 8) {
-                Image(icon)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 15, height: 15)
-                    .foregroundStyle(filled ? AnyShapeStyle(routineTint.wcagContrastingSolidTextColor) : AnyShapeStyle(routineTint))
-                    .wcagContrastLift(on: routineTint, isActive: filled)
+                if filled {
+                    Image(icon)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                        .foregroundStyle(Color.white)
+                        .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
 
-                Text(title)
-                    .font(.system(size: 14, weight: .black, design: .rounded))
-                    .foregroundStyle(filled ? routineTint.wcagContrastingSolidTextColor : .white.opacity(0.85))
-                    .wcagContrastLift(on: routineTint, isActive: filled)
+                    Text(title)
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .foregroundStyle(Color.white)
+                        .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
+                } else {
+                    Image(icon)
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                        .foregroundStyle(routineTint)
+                        .wcagContrastLift(on: routineTint, isActive: false)
+                        .bubblyIconMaterial(tint: routineTint)
+
+                    Text(title)
+                        .font(.system(size: 14, weight: .black, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .wcagContrastLift(on: routineTint, isActive: false)
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
             .background {
                 if filled {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous).fill(routineTint)
+                    BubblyCardMaterial(
+                        tint: routineTint,
+                        cornerRadius: 16
+                    )
                 } else {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(.white.opacity(0.06))
@@ -599,11 +631,15 @@ struct RoutineTaskDetailView: View {
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(active ? .white : .white.opacity(0.25))
                     .frame(width: 34, height: 30)
-                    .background(
-                        active
-                        ? AnyShapeStyle(routineTint)
-                        : AnyShapeStyle(Color.white.opacity(0.06))
-                    )
+                    .background {
+                        let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+
+                        if active {
+                            shape.fill(routineTint)
+                        } else {
+                            shape.fill(Color.black.opacity(0.34))
+                        }
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
         }
@@ -663,6 +699,7 @@ struct RoutineTaskDetailView: View {
                                         .scaledToFit()
                                         .frame(width: 13, height: 13)
                                         .foregroundStyle(LColors.success)
+                                        .bubblyIconMaterial(tint: routineTint)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -733,6 +770,7 @@ struct RoutineTaskDetailView: View {
                                             .scaledToFit()
                                             .frame(width: 12, height: 12)
                                             .foregroundStyle(LColors.success)
+                                            .bubblyIconMaterial(tint: routineTint)
 
                                         Text(solution)
                                             .font(.system(size: 13, design: .rounded))
@@ -770,6 +808,7 @@ struct RoutineTaskDetailView: View {
                             .scaledToFit()
                             .frame(width: 28, height: 28)
                             .foregroundStyle(routineTint)
+                            .bubblyIconMaterial(tint: routineTint)
                             .opacity(0.7)
 
                         Text("No history yet")
@@ -861,9 +900,10 @@ struct RoutineTaskDetailView: View {
         Text(text)
             .font(.system(size: 13, weight: .bold, design: .rounded))
             .foregroundStyle(routineTint)
+            .bubblyIconMaterial(tint: routineTint)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(.white.opacity(0.06))
+            .routineTaskDarkInset(in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -923,7 +963,7 @@ struct RoutineTaskDetailView: View {
                     .foregroundStyle(.white.opacity(0.9))
                     .lineLimit(3...6)
                     .padding(14)
-                    .background(.white.opacity(0.055))
+                    .routineTaskDarkInset(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -960,8 +1000,8 @@ struct RoutineTaskDetailView: View {
                 } label: {
                     Text("Convince Me")
                         .font(.system(size: 15, weight: .black, design: .rounded))
-                        .foregroundStyle(routineTint.wcagContrastingSolidTextColor)
-                        .wcagContrastLift(on: routineTint)
+                        .foregroundStyle(Color.white)
+                        .shadow(color: Color.black.opacity(0.68), radius: 2, x: 0, y: 1)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
                         .background(
@@ -986,6 +1026,7 @@ struct RoutineTaskDetailView: View {
                             .scaledToFit()
                             .frame(width: 16, height: 16)
                             .foregroundStyle(routineTint)
+                            .bubblyIconMaterial(tint: routineTint)
 
                         Text(task.friction.isEmpty ? "Add Friction" : "Update Friction")
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
@@ -993,7 +1034,7 @@ struct RoutineTaskDetailView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(14)
-                    .background(.white.opacity(0.055))
+                    .routineTaskDarkInset(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1012,7 +1053,7 @@ struct RoutineTaskDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
-                .background(.white.opacity(0.055))
+                .routineTaskDarkInset(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1032,7 +1073,7 @@ struct RoutineTaskDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
-                .background(.white.opacity(0.055))
+                .routineTaskDarkInset(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1081,6 +1122,7 @@ struct RoutineTaskDetailView: View {
                 .scaledToFit()
                 .frame(width: 20, height: 20)
                 .foregroundStyle(routineTint)
+                .bubblyIconMaterial(tint: routineTint)
             Text(title)
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
@@ -1112,9 +1154,8 @@ struct RoutineTaskDetailView: View {
         content()
             .padding(18)
             .background {
-                LureliaUserChoiceSurface(
+                BubblyCardMaterial(
                     tint: routineTint,
-                    role: role,
                     cornerRadius: 22
                 )
             }
@@ -1154,6 +1195,7 @@ struct RoutineTaskDetailView: View {
                     .frame(width: 11, height: 11)
                     .foregroundStyle(routineTint.wcagContrastingSolidTextColor)
                     .wcagContrastLift(on: routineTint)
+                    .bubblyIconMaterial(tint: routineTint)
             }
         }
     }
@@ -1166,6 +1208,7 @@ struct RoutineTaskDetailView: View {
             .scaledToFit()
             .frame(width: 24, height: 24)
             .foregroundStyle(dimmed ? routineTint.opacity(0.45) : routineTint)
+            .bubblyIconMaterial(tint: routineTint)
     }
 
     private func metricTile(icon: String, label: String, value: String) -> some View {
@@ -1176,6 +1219,7 @@ struct RoutineTaskDetailView: View {
                 .scaledToFit()
                 .frame(width: 18, height: 18)
                 .foregroundStyle(routineTint)
+                .bubblyIconMaterial(tint: routineTint)
 
             Text(label.uppercased())
                 .font(.system(size: 9, weight: .semibold, design: .rounded))
@@ -1190,7 +1234,7 @@ struct RoutineTaskDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(.white.opacity(0.055))
+        .routineTaskDarkInset(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -1215,6 +1259,7 @@ struct RoutineTaskDetailView: View {
                     .frame(width: 11, height: 11)
                     .foregroundStyle(routineTint.wcagContrastingSolidTextColor)
                     .wcagContrastLift(on: routineTint)
+                    .bubblyIconMaterial(tint: routineTint)
             } else {
                 Text("\(number)")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
@@ -1231,6 +1276,8 @@ struct RoutineTaskDetailView: View {
                 .scaledToFit()
                 .frame(width: 16, height: 16)
                 .foregroundStyle(.white.opacity(0.35))
+                .bubblyIconMaterial(tint: routineTint)
+                .shadow(color: Color.black.opacity(0.65), radius: 4, x: 0, y: 3)
 
             Text(text)
                 .font(.system(size: 13, design: .rounded))
@@ -1276,6 +1323,7 @@ private struct FlowChips: View {
                         .scaledToFit()
                         .frame(width: 11, height: 11)
                         .foregroundStyle(tint)
+                        .bubblyIconMaterial(tint: tint)
 
                     Text(name)
                         .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -1283,7 +1331,7 @@ private struct FlowChips: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(.white.opacity(0.06))
+                .routineTaskDarkInset(in: Capsule())
                 .clipShape(Capsule())
                 .overlay(Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1))
             }

@@ -11,6 +11,8 @@
 import SwiftUI
 
 struct HostPostPreviewCard: View {
+    @Environment(\.appTheme) private var theme
+
     let title: String
     let author: String
     let previewText: String
@@ -18,50 +20,57 @@ struct HostPostPreviewCard: View {
     let createdAt: Date
     let isPinned: Bool
     let isAnnouncement: Bool
+    var tint: Color = LColors.accent
 
     var body: some View {
-        GlassCard(cornerRadius: 18, padding: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 8) {
-                    if isPinned {
-                        Text("PINNED")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundStyle(Color.white.adaptivePrimaryText)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(LGradients.header))
-                    }
-                    if isAnnouncement {
-                        Text("ANNOUNCEMENT")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundStyle(LColors.textPrimary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Capsule().fill(LColors.warning.opacity(0.55)))
-                    }
-                    Spacer()
-                    Text(createdAt, style: .relative)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(LColors.textSecondary)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                if isPinned {
+                    materialBadge("PINNED")
                 }
-
-                Text(previewText)
-                    .font(
-                        .system(
-                            size: previewIsHeading ? 17 : 14,
-                            weight: previewIsHeading ? .black : .semibold,
-                            design: .rounded,
-                        ),
-                    )
-                    .foregroundStyle(LColors.textPrimary)
-                    .lineLimit(previewIsHeading ? 2 : 3)
-                    .multilineTextAlignment(.leading)
-
-                Text(author)
-                    .font(.system(size: 11, weight: .black, design: .rounded))
+                if isAnnouncement {
+                    materialBadge("ANNOUNCEMENT")
+                }
+                Spacer()
+                Text(createdAt, style: .relative)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
                     .foregroundStyle(LColors.textSecondary)
             }
+
+            Text(previewText)
+                .font(
+                    .system(
+                        size: previewIsHeading ? 17 : 14,
+                        weight: previewIsHeading ? .black : .semibold,
+                        design: .rounded,
+                    ),
+                )
+                .foregroundStyle(LColors.textPrimary)
+                .lineLimit(previewIsHeading ? 2 : 3)
+                .multilineTextAlignment(.leading)
+
+            Text(author)
+                .font(.system(size: 11, weight: .black, design: .rounded))
+                .foregroundStyle(LColors.textSecondary)
         }
+        .padding(14)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(tint, lineWidth: 1)
+        }
+    }
+
+    private func materialBadge(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: 9, weight: .black, design: .rounded))
+            .foregroundStyle(.black)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background {
+                BubblyIconMaterial(tint: tint)
+                    .clipShape(Capsule())
+            }
     }
 }
 

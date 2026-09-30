@@ -353,6 +353,18 @@ final class LureliaRoutineRun {
         isPaused = false
         pausedAt = nil
     }
+
+    func pausedDuration(at date: Date) -> TimeInterval {
+        let activePauseDuration: TimeInterval
+
+        if isPaused, let pausedAt {
+            activePauseDuration = max(0, date.timeIntervalSince(pausedAt))
+        } else {
+            activePauseDuration = 0
+        }
+
+        return max(0, totalPausedSeconds) + activePauseDuration
+    }
 }
 
 // MARK: - Routine
